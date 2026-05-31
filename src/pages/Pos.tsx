@@ -193,6 +193,12 @@ export default function Pos({ session, onLogout }: Props) {
   const loadFromServer = async () => {
     try {
       const me = await api.pos.me();
+      // El admin cerró la sesión de la caja → desloguear al empleado activo
+      // (vuelve al selector/PIN) sin perder el token de dispositivo.
+      if (me.cashierLocked) {
+        window.dispatchEvent(new CustomEvent('pos:cashier-locked'));
+        return;
+      }
       setAllProducts(me.products);
       setResults(me.products);
       setPaymentMethods(Array.isArray(me.paymentMethods) ? me.paymentMethods : []);

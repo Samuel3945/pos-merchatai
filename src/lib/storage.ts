@@ -5,7 +5,7 @@ const KEY = 'pos_web_session_v1';
 
 export interface PosSession {
   jwt:        string;
-  expiresAt:  number;          // unix seconds
+  expiresAt?: number;          // unix seconds (informativo; ya no se usa para cortar la sesión)
   cash: {
     id:           string;
     displayCode:  string;
@@ -22,8 +22,10 @@ export function loadSession(): PosSession | null {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
     const s = JSON.parse(raw) as PosSession;
-    if (!s.jwt || !s.expiresAt) return null;
-    if (s.expiresAt * 1000 < Date.now()) return null;
+    if (!s.jwt) return null;
+    // La sesión del cajero NO expira por tiempo: persiste hasta que el usuario
+    // cierre sesión o el server responda 401 (token revocado/regenerado por el
+    // admin → lo maneja el evento 'pos:session-expired' en api.ts).
     return s;
   } catch {
     return null;

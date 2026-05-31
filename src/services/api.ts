@@ -26,11 +26,45 @@ function readToken(): string | null {
   } catch { return null; }
 }
 
+// ── Empleado activo — caja compartida ────────────────────────────────────────
+// La caja (token) la usan varios empleados. El empleado seleccionado se guarda
+// en sessionStorage (sobrevive recargas, NO el cierre de pestaña → al reabrir
+// se vuelve a pedir el PIN). Su id viaja en `X-Pos-Cashier-Id` para atribuir
+// cada venta/movimiento al empleado correcto en el backend.
+
+export interface ActiveCashier { id: string; name: string; role: string }
+
+const ACTIVE_CASHIER_KEY = 'pos_active_cashier';
+
+let activeCashier: ActiveCashier | null = (() => {
+  try {
+    const r = sessionStorage.getItem(ACTIVE_CASHIER_KEY);
+    return r ? (JSON.parse(r) as ActiveCashier) : null;
+  } catch { return null; }
+})();
+
+export function getActiveCashier(): ActiveCashier | null { return activeCashier; }
+
+export function setActiveCashier(c: ActiveCashier | null): void {
+  activeCashier = c;
+  try {
+    if (c) sessionStorage.setItem(ACTIVE_CASHIER_KEY, JSON.stringify(c));
+    else sessionStorage.removeItem(ACTIVE_CASHIER_KEY);
+  } catch { /* sin sessionStorage en algunos entornos */ }
+}
+
+// Epoch de sesión de la caja. /pos/me lo devuelve; lo reenviamos en cada
+// request. Si el admin "cierra la sesión", el server sube su epoch → al mandar
+// el viejo, /pos/me responde `cashierLocked: true` (lo maneja Pos.tsx).
+let knownEpoch: number | null = null;
+
 async function req<T>(path: string, options?: RequestInit): Promise<T> {
   const token = readToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    ...(activeCashier ? { 'X-Pos-Cashier-Id': activeCashier.id } : {}),
+    ...(knownEpoch != null ? { 'X-Pos-Session-Epoch': String(knownEpoch) } : {}),
     ...((options?.headers as Record<string, string>) || {}),
   };
   const res = await fetch(`${BASE}${path}`, { ...options, headers });
@@ -44,7 +78,7 @@ async function req<T>(path: string, options?: RequestInit): Promise<T> {
     if (res.status === 401) {
       window.dispatchEvent(new CustomEvent('pos:session-expired'));
     }
-    const err: Error & { code?: string; status?: number } = new Error(body?.message || res.statusText || 'Request failed');
+    const err: Error & { code?: string; status?: number } = new Error(body?.message || body?.error || res.statusText || 'Request failed');
     if (body?.code) err.code = String(body.code);
     err.status = res.status;
     throw err;
@@ -57,6 +91,10 @@ async function req<T>(path: string, options?: RequestInit): Promise<T> {
     err.code = 'session-expired';
     err.status = 401;
     throw err;
+  }
+  // /pos/me trae el epoch actual de la caja → lo recordamos para reenviarlo.
+  if (body && typeof body === 'object' && typeof body.sessionEpoch === 'number') {
+    knownEpoch = body.sessionEpoch;
   }
   return body as T;
 }
@@ -191,6 +229,15 @@ export interface CashMovement {
 //    endpoint que el JWT de dispositivo SÍ puede consumir (los endpoints
 //    /api/products, /api/sales, /api/settings/* exigen JWT de usuario admin).
 
+export type CashierRole = 'admin' | 'cashier' | 'employee';
+
+export interface CashierLite {
+  id:     string;
+  name:   string;
+  role:   CashierRole;
+  hasPin: boolean;
+}
+
 export interface MeResponse {
   cash: {
     id:           string;
@@ -204,7 +251,10 @@ export interface MeResponse {
   store: { id: string; name: string; phone: string; type: string; offering: string };
   features: { fiadoEnabled: boolean; sellByWeight: boolean; sellDigital: boolean; wholesale: boolean; canConfirmTransfers: boolean };
   paymentMethods: PaymentMethod[];
+  cashiers:       CashierLite[];
   products:       Product[];
+  sessionEpoch?:  number;
+  cashierLocked?: boolean;
   serverTime:     string;
 }
 
@@ -245,6 +295,20 @@ export interface Customer {
 // ── API surface ───────────────────────────────────────────────────────────────
 
 export const api = {
+  cashiers: {
+    list: () => req<{ cashiers: CashierLite[] }>('/pos/cashiers'),
+    verifyPin: (cashierId: string, pin: string) =>
+      req<{ ok: boolean; cashier: CashierLite }>('/pos/cashiers/verify-pin', {
+        method: 'POST',
+        body: JSON.stringify({ cashierId, pin }),
+      }),
+    setPin: (cashierId: string, currentPin: string, newPin: string) =>
+      req<{ ok: boolean; hasPin: boolean }>('/pos/cashiers/set-pin', {
+        method: 'POST',
+        body: JSON.stringify({ cashierId, currentPin, newPin }),
+      }),
+  },
+
   pos: {
     me: () => req<MeResponse>('/pos/me'),
     paymentMethods: () => req<PaymentMethod[]>('/pos/payment-methods'),
