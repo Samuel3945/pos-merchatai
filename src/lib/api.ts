@@ -39,7 +39,11 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   }
   if (!res.ok) {
     if (res.status === 401 && opts.jwt) window.dispatchEvent(new CustomEvent('pos:session-expired'));
-    throw new ApiError(body?.message || `HTTP ${res.status}`, res.status);
+    // MerchantAI responde con `error` (no `message`). Leemos ambos para no
+    // mostrar "HTTP 401" cuando el backend sí mandó un mensaje claro (p. ej.
+    // "PIN de la caja incorrecto"). El caso "falta PIN" llega como 200 con
+    // `pinRequired` y se maneja en api.login, no acá.
+    throw new ApiError(body?.message || body?.error || `HTTP ${res.status}`, res.status, body?.code);
   }
   // Soft-auth: el backend responde 200 con `{ sessionExpired: true }` en /pos/me
   // cuando el JWT está stale, para no ensuciar consola con 401. Lo tratamos
