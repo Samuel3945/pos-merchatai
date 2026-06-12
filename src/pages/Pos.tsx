@@ -188,6 +188,16 @@ export default function Pos({ session, onLogout }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Abrir/cerrar la caja ocurre en la pestaña Caja (otro componente). Como Pos
+  // queda siempre montado, escuchamos este evento para re-evaluar la caja al
+  // instante en vez de esperar el refresco de 30s o un toque manual.
+  useEffect(() => {
+    const onCashChanged = () => { loadFromServer(); };
+    window.addEventListener('pos:cash-changed', onCashChanged);
+    return () => window.removeEventListener('pos:cash-changed', onCashChanged);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // /api/pos/me devuelve catálogo + paymentMethods + features.fiadoEnabled en
   // una sola llamada — es lo que el JWT de dispositivo puede consumir.
   const loadFromServer = async () => {
@@ -204,7 +214,20 @@ export default function Pos({ session, onLogout }: Props) {
       setPaymentMethods(Array.isArray(me.paymentMethods) ? me.paymentMethods : []);
       setFiadoEnabled(!!me.features?.fiadoEnabled);
       setCanConfirmTransfers(me.features?.canConfirmTransfers !== false);
-      setCashOpen(!!(me.cash as any)?.cashSessionId);
+      // Caja abierta: el happy-path lee `cash.cashSessionId` de /pos/me. Pero un
+      // backend desplegado más viejo puede no devolver ese campo todavía → ahí el
+      // POS quedaba bloqueado en "Caja cerrada" para siempre aunque la caja SÍ
+      // estuviera abierta. Antes de bloquear, consultamos el endpoint autoritativo
+      // /pos/cash/current (el mismo que usa la pestaña Caja), que siempre devuelve
+      // la sesión abierta de la organización.
+      let open = !!(me.cash as any)?.cashSessionId;
+      if (!open) {
+        try {
+          const c = await api.cash.current();
+          open = !!c.session;
+        } catch { /* red caída → mantenemos el último estado conocido abajo */ }
+      }
+      setCashOpen(open);
       cacheProducts(me.products).catch(() => {});
     } catch {
       // Solo caemos al cache si la red realmente falla.
