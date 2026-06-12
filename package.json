@@ -11,6 +11,7 @@
     "test": "echo \"(no tests yet — placeholder so CI does not fail)\" && exit 0"
   },
   "dependencies": {
+    "jsqr": "^1.4.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },

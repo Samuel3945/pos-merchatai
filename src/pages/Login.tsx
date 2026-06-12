@@ -1,26 +1,65 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../lib/api';
+import QrScanner from '../components/QrScanner';
 
 interface Props {
   onLoggedIn: (data: { jwt: string; expiresAt: number; cash: any }) => void;
+}
+
+// The access QR encodes a deep link like https://pos.../?code=TOKEN. Accept
+// both that URL (scanned in-app or via the phone camera) and a raw token.
+function extractAccessCode(text: string): string {
+  const raw = text.trim();
+  try {
+    const url = new URL(raw);
+    const fromParam = url.searchParams.get('code');
+    if (fromParam) return fromParam.trim();
+  } catch {
+    // not a URL — treat as a raw token
+  }
+  return raw;
 }
 
 export default function Login({ onLoggedIn }: Props) {
   const [code, setCode] = useState('');
   const [pin,  setPin]  = useState('');
   const [busy, setBusy] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const codeRef = useRef<HTMLInputElement>(null);
   const pinRef  = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { codeRef.current?.focus(); }, []);
+  useEffect(() => {
+    // Deep link from the access QR scanned with a regular camera: the URL
+    // carries ?code=, so the cashier only has to type the PIN.
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get('code');
+    if (fromUrl && fromUrl.trim()) {
+      setCode(fromUrl.trim());
+      // Drop the token from the address bar / browser history.
+      window.history.replaceState(null, '', window.location.pathname);
+      setTimeout(() => pinRef.current?.focus(), 50);
+      return;
+    }
+    codeRef.current?.focus();
+  }, []);
+
+  function handleScan(text: string) {
+    const scanned = extractAccessCode(text);
+    setScanning(false);
+    if (scanned) {
+      setCode(scanned);
+      setError(null);
+      setTimeout(() => pinRef.current?.focus(), 50);
+    }
+  }
 
   async function submit() {
     setError(null);
     if (!code.trim()) { setError('Ingresa el código de acceso'); codeRef.current?.focus(); return; }
     setBusy(true);
     try {
-      const r = await api.login(code.trim(), pin.trim(), navigator.userAgent.slice(0, 80));
+      const r = await api.login(extractAccessCode(code), pin.trim(), navigator.userAgent.slice(0, 80));
       const expiresAt = Math.floor(Date.now() / 1000) + r.expiresInS;
       onLoggedIn({ jwt: r.jwt, expiresAt, cash: r.cash });
     } catch (e) {
@@ -75,6 +114,13 @@ export default function Login({ onLoggedIn }: Props) {
               className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl px-4 py-3.5 text-sm text-white font-mono placeholder:text-[#40484b] placeholder:font-sans focus:border-[#9acee1] transition-colors outline-none"
             />
             <div className="text-[#40484b] text-[10px] mt-1.5">El administrador genera este código en la vista Cajeros → Generar token</div>
+            <button
+              type="button"
+              onClick={() => setScanning(true)}
+              className="mt-2 w-full flex items-center justify-center gap-2 bg-[#1a1a1a] border border-[#333] hover:border-[#9acee1] text-[#9acee1] font-semibold py-2.5 rounded-xl text-sm transition-colors active:scale-[0.98]">
+              <span className="material-symbols-outlined text-[18px]">qr_code_scanner</span>
+              Escanear QR de acceso
+            </button>
           </div>
 
           <div>
@@ -114,6 +160,7 @@ export default function Login({ onLoggedIn }: Props) {
           Si no tienes un código, pídele al administrador que cree uno en la sección Cajeros.
         </div>
       </div>
+      {scanning && <QrScanner onScan={handleScan} onClose={() => setScanning(false)} />}
     </div>
   );
 }
