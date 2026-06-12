@@ -112,6 +112,10 @@ export default function CajaCajero() {
       await api.cash.open(amt, openNotes || undefined);
       setShowOpen(false); setOpenAmount(''); setOpenNotes('');
       showOk('Caja abierta');
+      // El POS vive en otra pestaña y queda siempre montado: avisarle para que
+      // re-evalúe la caja al instante y desbloquee la venta sin esperar el
+      // refresco periódico ni un toque manual.
+      window.dispatchEvent(new CustomEvent('pos:cash-changed'));
       load();
     } catch (e: any) { setError(e.message || 'Error al abrir'); }
     finally { setOpenBusy(false); }
@@ -125,6 +129,7 @@ export default function CajaCajero() {
       await api.cash.close(amt, closeNotes || undefined);
       setShowClose(false); setCloseAmount(''); setCloseNotes('');
       showOk('Caja cerrada');
+      window.dispatchEvent(new CustomEvent('pos:cash-changed'));
       load();
     } catch (e: any) { setError(e.message || 'Error al cerrar'); }
     finally { setCloseBusy(false); }
