@@ -248,7 +248,7 @@ export interface MeResponse {
     cashierId:    string | null;
     locationId:   string | null;
   };
-  store: { id: string; name: string; phone: string; type: string; offering: string };
+  store: { id: string; name: string; phone: string; type: string; offering: string; fiadoTermDays?: number };
   features: { fiadoEnabled: boolean; sellByWeight: boolean; sellDigital: boolean; wholesale: boolean; canConfirmTransfers: boolean };
   paymentMethods: PaymentMethod[];
   cashiers:       CashierLite[];

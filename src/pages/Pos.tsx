@@ -158,6 +158,7 @@ export default function Pos({ session, onLogout }: Props) {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [showCheckout, setShowCheckout] = useState(false);
   const [fiadoEnabled, setFiadoEnabled] = useState(false);
+  const [fiadoTermDays, setFiadoTermDays] = useState(30);
   const [canConfirmTransfers, setCanConfirmTransfers] = useState(true);
   const [showQueue, setShowQueue] = useState(false);
   const [queuedSales, setQueuedSales] = useState<QueuedSale[]>([]);
@@ -232,6 +233,9 @@ export default function Pos({ session, onLogout }: Props) {
       setResults(me.products);
       setPaymentMethods(Array.isArray(me.paymentMethods) ? me.paymentMethods : []);
       setFiadoEnabled(!!me.features?.fiadoEnabled);
+      setFiadoTermDays(
+        typeof (me.store as any)?.fiadoTermDays === 'number' ? (me.store as any).fiadoTermDays : 30,
+      );
       setCanConfirmTransfers(me.features?.canConfirmTransfers !== false);
       // Caja abierta: el happy-path lee `cash.cashSessionId` de /pos/me. Pero un
       // backend desplegado más viejo puede no devolver ese campo todavía → ahí el
@@ -569,6 +573,7 @@ export default function Pos({ session, onLogout }: Props) {
           paymentMethods={paymentMethods}
           fiadoEnabled={fiadoEnabled}
           canConfirmTransfers={canConfirmTransfers}
+          fiadoTermDays={fiadoTermDays}
           loading={loading}
           onConfirm={completeSaleMixed}
           onCancel={() => setShowCheckout(false)}

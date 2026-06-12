@@ -21,6 +21,9 @@ interface Props {
   paymentMethods: PaymentMethod[];
   fiadoEnabled: boolean;
   canConfirmTransfers?: boolean;
+  // Plazo de pago por defecto del negocio (días). El backend asigna el
+  // vencimiento real con este mismo valor al crear el fiado.
+  fiadoTermDays?: number;
   onConfirm: (payments: SalePayment[], notes?: string) => Promise<void>;
   onCancel: () => void;
   loading: boolean;
@@ -48,7 +51,7 @@ function methodTheme(type: string, _name: string) {
 // Modal principal
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function CheckoutModal({ total, paymentMethods, fiadoEnabled, canConfirmTransfers = true, onConfirm, onCancel, loading }: Props) {
+export default function CheckoutModal({ total, paymentMethods, fiadoEnabled, canConfirmTransfers = true, fiadoTermDays = 30, onConfirm, onCancel, loading }: Props) {
   const availableMethods = useMemo<Method[]>(() => {
     const list: Method[] = [];
     const activeCustom = paymentMethods.filter(pm => pm.active);
@@ -267,6 +270,7 @@ export default function CheckoutModal({ total, paymentMethods, fiadoEnabled, can
               fiadoPhone={fiadoPhone} setFiadoPhone={setFiadoPhone}
               fiadoWhen={fiadoWhen} setFiadoWhen={setFiadoWhen}
               usingFiado={usingFiado}
+              fiadoTermDays={fiadoTermDays}
             />
           )}
 
@@ -340,6 +344,7 @@ interface PaymentStepProps {
   fiadoPhone: string; setFiadoPhone: (s: string) => void;
   fiadoWhen: string; setFiadoWhen: (s: string) => void;
   usingFiado: boolean;
+  fiadoTermDays: number;
 }
 
 function PaymentStep(props: PaymentStepProps) {
@@ -347,6 +352,7 @@ function PaymentStep(props: PaymentStepProps) {
     total, availableMethods, drafts, setDrafts, combineMode, setCombineMode, allowMultiple,
     totals, pickExact, pickCashReceived, updateDraft, removeDraft,
     fiadoName, setFiadoName, fiadoPhone, setFiadoPhone, fiadoWhen, setFiadoWhen, usingFiado,
+    fiadoTermDays,
   } = props;
 
   // Ordenar para que efectivo aparezca primero (es el más usado en tienda).
@@ -461,6 +467,7 @@ function PaymentStep(props: PaymentStepProps) {
           name={fiadoName} setName={setFiadoName}
           phone={fiadoPhone} setPhone={setFiadoPhone}
           when={fiadoWhen} setWhen={setFiadoWhen}
+          termDays={fiadoTermDays}
         />
       )}
 
@@ -554,6 +561,7 @@ function PaymentStep(props: PaymentStepProps) {
               name={fiadoName} setName={setFiadoName}
               phone={fiadoPhone} setPhone={setFiadoPhone}
               when={fiadoWhen} setWhen={setFiadoWhen}
+              termDays={fiadoTermDays}
             />
           )}
         </div>
@@ -563,12 +571,19 @@ function PaymentStep(props: PaymentStepProps) {
 }
 
 function FiadoFields({
-  name, setName, phone, setPhone, when, setWhen,
+  name, setName, phone, setPhone, when, setWhen, termDays,
 }: {
   name: string; setName: (s: string) => void;
   phone: string; setPhone: (s: string) => void;
   when: string; setWhen: (s: string) => void;
+  termDays: number;
 }) {
+  // Vencimiento real que asignará el servidor: el plazo por defecto del negocio
+  // (Ajustes). Lo mostramos para que el cajero sepa hasta cuándo tiene el cliente.
+  const dueDate = new Date(Date.now() + termDays * 86400000);
+  const dueLabel = new Intl.DateTimeFormat('es-CO', {
+    weekday: 'long', day: 'numeric', month: 'long',
+  }).format(dueDate);
   return (
     <div className="bg-[#5d4000]/20 border border-[#ffba27]/30 rounded-xl p-3 space-y-2">
       <p className="text-[#ffba27] text-[11px] font-bold uppercase tracking-widest">Datos del cliente (fiado)</p>
@@ -594,6 +609,9 @@ function FiadoFields({
           placeholder="Ej: Viernes, fin de mes…"
           className="w-full bg-[#121212] border border-[#5d4000] rounded-lg px-3 py-2 text-[#e1e2e4] text-sm focus:border-[#ffba27] outline-none" />
       </div>
+      <p className="text-[#ffba27]/90 text-[11px] leading-snug pt-0.5">
+        Plazo del negocio: <strong>{termDays} días</strong> — vence el {dueLabel}.
+      </p>
     </div>
   );
 }
