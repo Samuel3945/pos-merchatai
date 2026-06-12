@@ -32,6 +32,25 @@ interface CartItem {
   unitType: 'unit' | 'kg';
 }
 
+// Wholesale pricing: pick the best tier the quantity qualifies for (highest
+// min_qty that is <= qty); otherwise the base price. Tiers come from the
+// product form in the admin ("Venta al por mayor").
+function unitPriceFor(product: Product, qty: number): number {
+  const base = Number(product.price);
+  if (!product.is_wholesale || !Array.isArray(product.wholesale_tiers)) return base;
+  let best = base;
+  let bestMin = 0;
+  for (const t of product.wholesale_tiers) {
+    const min = Number(t.min_qty);
+    const price = Number(t.price);
+    if (Number.isFinite(min) && Number.isFinite(price) && price > 0 && qty >= min && min > bestMin) {
+      best = price;
+      bestMin = min;
+    }
+  }
+  return best;
+}
+
 // Modal for kg weight input
 function KgModal({
   product, onConfirm, onCancel,
@@ -334,8 +353,12 @@ export default function Pos({ session, onLogout }: Props) {
         const currentQty = ex?.qty ?? 0;
         if (currentQty + qty > product.stock) { flashBorder('err'); return prev; }
       }
-      if (ex) return prev.map(i => i.productId === product.id ? { ...i, qty: parseFloat((i.qty + qty).toFixed(3)) } : i);
-      return [...prev, { productId: product.id, name: product.name, price: Number(product.price), qty, unitType: product.unit_type }];
+      if (ex) return prev.map(i => {
+        if (i.productId !== product.id) return i;
+        const newQty = parseFloat((i.qty + qty).toFixed(3));
+        return { ...i, qty: newQty, price: unitPriceFor(product, newQty) };
+      });
+      return [...prev, { productId: product.id, name: product.name, price: unitPriceFor(product, qty), qty, unitType: product.unit_type }];
     });
     flashBorder('ok');
     setQuery(''); setResults(allProducts);
@@ -369,7 +392,9 @@ export default function Pos({ session, onLogout }: Props) {
     setCart(prev => prev.map(i => {
       if (i.productId !== id) return i;
       const newQty = i.unitType === 'unit' ? i.qty + d : parseFloat((i.qty + d * 0.1).toFixed(3));
-      return { ...i, qty: newQty };
+      // Re-evaluate wholesale tiers whenever the quantity changes.
+      const live = allProducts.find(p => p.id === id);
+      return { ...i, qty: newQty, price: live ? unitPriceFor(live, newQty) : i.price };
     }).filter(i => i.qty > 0));
 
   const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
@@ -479,12 +504,20 @@ export default function Pos({ session, onLogout }: Props) {
           <span className="material-symbols-outlined text-3xl block mb-2">shopping_cart</span>
           Carrito vacío
         </div>
-      ) : cart.map(item => (
+      ) : cart.map(item => {
+        const liveProduct = allProducts.find(p => p.id === item.productId);
+        const wholesaleApplied = liveProduct ? item.price < Number(liveProduct.price) : false;
+        return (
         <div key={item.productId} className="flex items-center gap-3 px-4 py-3 border-b border-[#333333] last:border-0">
           <div className="flex-1 min-w-0">
             <div className="text-[#e1e2e4] text-sm font-medium truncate">{item.name}</div>
-            <div className="text-[#8a9295] text-xs">
+            <div className="text-[#8a9295] text-xs flex items-center gap-1.5">
               ${item.price.toLocaleString('es-CO')} {item.unitType === 'kg' ? '/ kg' : 'c/u'}
+              {wholesaleApplied && (
+                <span className="px-1.5 py-px rounded-full bg-[#0f4c5c] text-[#9acee1] text-[10px] font-bold">
+                  Mayoreo
+                </span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -500,7 +533,8 @@ export default function Pos({ session, onLogout }: Props) {
             ${(item.price * item.qty).toLocaleString('es-CO')}
           </div>
         </div>
-      ))}
+        );
+      })}
     </>
   );
 
