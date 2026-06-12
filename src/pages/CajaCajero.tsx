@@ -67,6 +67,10 @@ const REASONS_BY_TYPE: Partial<Record<CashMovementType, string[]>> = {
 export default function CajaCajero() {
   const [session, setSession]     = useState<CashSession | null>(null);
   const [movements, setMovements] = useState<CashMovement[]>([]);
+  // Efectivo esperado en el cajón = apertura + ventas en efectivo + entradas −
+  // salidas. Lo calcula el backend (/pos/cash/current). Es lo que el cajero debe
+  // entregar al cerrar.
+  const [expected, setExpected]   = useState(0);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState('');
   const [success, setSuccess]     = useState('');
@@ -97,6 +101,7 @@ export default function CajaCajero() {
       const d = await api.cash.current();
       setSession(d.session);
       setMovements(d.movements || []);
+      setExpected(typeof d.expected === 'number' ? d.expected : 0);
     } catch { setError('No se pudo cargar la caja'); }
     finally { setLoading(false); }
   }, []);
@@ -171,6 +176,15 @@ export default function CajaCajero() {
     .filter(m => m.type !== 'sale')
     .reduce((acc, m) => m.type === 'deposit' || m.type === 'adjustment' ? acc + Number(m.amount) : acc - Number(m.amount), 0);
 
+  // Ventas en efectivo del turno (las que ya están contadas dentro de `expected`).
+  const cashSales = movements
+    .filter(m => m.type === 'sale')
+    .reduce((acc, m) => acc + Number(m.amount), 0);
+
+  // Cuadre en vivo del cierre: contado − esperado. >0 sobra, <0 falta.
+  const countedNum = closeAmount.trim() !== '' ? (parseFloat(closeAmount) || 0) : null;
+  const closeDiff  = countedNum != null ? countedNum - expected : null;
+
   return (
     <div className="h-full overflow-y-auto bg-[#111415]">
       <div className="max-w-lg mx-auto px-4 py-5 pb-6 space-y-4">
@@ -198,15 +212,28 @@ export default function CajaCajero() {
           </div>
 
           {isOpen && (
-            <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="mt-4 grid grid-cols-3 gap-2">
               <div className="bg-[#121212] rounded-xl p-3">
                 <div className="text-[#8a9295] text-[10px] uppercase tracking-wider mb-0.5">Apertura</div>
                 <div className="text-[#e1e2e4] font-bold tabular-nums">{COP(session?.opening_amount || 0)}</div>
               </div>
               <div className="bg-[#121212] rounded-xl p-3">
+                <div className="text-[#8a9295] text-[10px] uppercase tracking-wider mb-0.5">Ventas efectivo</div>
+                <div className="text-[#95d4b3] font-bold tabular-nums">{COP(cashSales)}</div>
+              </div>
+              <div className="bg-[#121212] rounded-xl p-3">
                 <div className="text-[#8a9295] text-[10px] uppercase tracking-wider mb-0.5">Movimientos</div>
                 <div className={`font-bold tabular-nums ${totalMov >= 0 ? 'text-[#95d4b3]' : 'text-[#ffb4ab]'}`}>{COP(totalMov)}</div>
               </div>
+            </div>
+          )}
+          {isOpen && (
+            <div className="mt-3 bg-[#12533a]/30 border border-[#95d4b3]/40 rounded-xl p-3.5 flex items-center justify-between">
+              <div>
+                <div className="text-[#95d4b3] text-[10px] uppercase tracking-wider font-bold mb-0.5">Efectivo esperado en caja</div>
+                <div className="text-[#8a9295] text-[11px]">Esto es lo que debe haber para entregar</div>
+              </div>
+              <div className="text-[#95d4b3] font-black text-2xl tabular-nums">{COP(expected)}</div>
             </div>
           )}
         </div>
@@ -302,14 +329,24 @@ export default function CajaCajero() {
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
-            <div className="bg-[#121212] border border-[#333] rounded-xl p-4 flex items-center justify-between">
-              <div>
-                <div className="text-[#8a9295] text-[10px] uppercase tracking-wider">Apertura</div>
-                <div className="text-[#e1e2e4] font-bold tabular-nums">{COP(session?.opening_amount || 0)}</div>
+            <div className="bg-[#121212] border border-[#333] rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-[#8a9295] text-[10px] uppercase tracking-wider">Apertura</div>
+                  <div className="text-[#e1e2e4] font-bold tabular-nums">{COP(session?.opening_amount || 0)}</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-[#8a9295] text-[10px] uppercase tracking-wider">Ventas efectivo</div>
+                  <div className="text-[#95d4b3] font-bold tabular-nums">{COP(cashSales)}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[#8a9295] text-[10px] uppercase tracking-wider">Movimientos</div>
+                  <div className={`font-bold tabular-nums ${totalMov >= 0 ? 'text-[#95d4b3]' : 'text-[#ffb4ab]'}`}>{COP(totalMov)}</div>
+                </div>
               </div>
-              <div className="text-right">
-                <div className="text-[#8a9295] text-[10px] uppercase tracking-wider">Movimientos</div>
-                <div className={`font-bold tabular-nums ${totalMov >= 0 ? 'text-[#95d4b3]' : 'text-[#ffb4ab]'}`}>{COP(totalMov)}</div>
+              <div className="flex items-center justify-between border-t border-[#333] pt-3">
+                <div className="text-[#95d4b3] text-[11px] uppercase tracking-wider font-bold">Efectivo esperado</div>
+                <div className="text-[#95d4b3] font-black text-lg tabular-nums">{COP(expected)}</div>
               </div>
             </div>
             <div>
@@ -317,6 +354,18 @@ export default function CajaCajero() {
               <input type="number" value={closeAmount} onChange={e => setCloseAmount(e.target.value)} placeholder="0" autoFocus
                 className="w-full bg-[#121212] border border-[#333] rounded-xl px-4 py-2.5 text-[#e1e2e4] text-sm focus:border-[#9acee1] outline-none transition-colors" />
             </div>
+            {closeDiff != null && (
+              <div className={`flex items-center justify-between rounded-xl px-4 py-2.5 text-sm font-bold ${
+                closeDiff === 0
+                  ? 'bg-[#12533a]/30 border border-[#95d4b3]/40 text-[#95d4b3]'
+                  : closeDiff > 0
+                    ? 'bg-[#0f4c5c]/30 border border-[#9acee1]/40 text-[#9acee1]'
+                    : 'bg-[#3a1010] border border-[#5a1818] text-[#ffb4ab]'
+              }`}>
+                <span>{closeDiff === 0 ? 'Caja cuadrada' : closeDiff > 0 ? 'Sobrante' : 'Faltante'}</span>
+                <span className="tabular-nums">{COP(Math.abs(closeDiff))}</span>
+              </div>
+            )}
             <div>
               <label className="block text-xs text-[#8a9295] font-semibold uppercase tracking-wider mb-1.5">Notas (opcional)</label>
               <input type="text" value={closeNotes} onChange={e => setCloseNotes(e.target.value)} placeholder="Observaciones al cierre…"

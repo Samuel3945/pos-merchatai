@@ -326,7 +326,10 @@ export const api = {
   },
 
   cash: {
-    current: () => req<{ session: CashSession | null; movements: CashMovement[] }>('/pos/cash/current'),
+    current: () =>
+      req<{ session: CashSession | null; movements: CashMovement[]; expected: number }>(
+        '/pos/cash/current',
+      ),
     open: (openingAmount: number, notes?: string) =>
       req<CashSession>('/pos/cash/open', {
         method: 'POST',
