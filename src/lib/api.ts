@@ -40,9 +40,7 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   if (!res.ok) {
     if (res.status === 401 && opts.jwt) window.dispatchEvent(new CustomEvent('pos:session-expired'));
     // MerchantAI responde con `error` (no `message`). Leemos ambos para no
-    // mostrar "HTTP 401" cuando el backend sí mandó un mensaje claro (p. ej.
-    // "PIN de la caja incorrecto"). El caso "falta PIN" llega como 200 con
-    // `pinRequired` y se maneja en api.login, no acá.
+    // mostrar "HTTP 401" cuando el backend sí mandó un mensaje claro.
     throw new ApiError(body?.message || body?.error || `HTTP ${res.status}`, res.status, body?.code);
   }
   // Soft-auth: el backend responde 200 con `{ sessionExpired: true }` en /pos/me
@@ -160,19 +158,14 @@ export interface PendingCommand {
 // ─── API surface ────────────────────────────────────────────────────────────
 
 export const api = {
-  // El backend devuelve 200 con `{ pinRequired: true }` cuando la caja tiene
-  // PIN configurado y todavía no se envió. Lo convertimos en un ApiError con
-  // code='pin-required' para que la UI muestre el campo sin pintar 4xx en
-  // consola. (Compat: backends antiguos devolvían 400 con "PIN" en mensaje.)
-  login: async (code: string, pin: string, deviceName?: string) => {
-    const r = await request<LoginResponse & { pinRequired?: boolean }>(
+  // La caja abre solo con el código de acceso (token). No hay PIN de caja: la
+  // responsabilidad de cada operación la lleva el PIN personal del empleado,
+  // que se verifica dentro de la app, no en este login.
+  login: async (code: string, deviceName?: string) => {
+    return request<LoginResponse>(
       '/pos/login',
-      { method: 'POST', body: { code, pin, deviceName } },
+      { method: 'POST', body: { code, deviceName } },
     );
-    if (r && (r as any).pinRequired) {
-      throw new ApiError((r as any).message || 'PIN requerido', 200, 'pin-required');
-    }
-    return r as LoginResponse;
   },
 
   me: (jwt: string) =>
