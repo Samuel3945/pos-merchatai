@@ -349,15 +349,19 @@ export const api = {
 
   fiados: {
     list: () => req<{ clients: FiadoClient[]; stats: Record<string, number> }>('/pos/fiados'),
-    abonar: (fiadoId: string, amount: number, method: string, notes?: string) =>
-      req<{ success: boolean }>(`/pos/fiados/${fiadoId}/pay`, {
+    // `clientKey` is FiadoClient.id from /pos/fiados: the server groups a client's
+    // debts under one key and distributes the abono FIFO (oldest due first). The
+    // endpoints are action-style (/abonar, /settle) and expect { clientKey, method },
+    // NOT the old Tiendademo REST shape (/fiados/{id}/pay, { paymentMethod }).
+    abonar: (clientKey: string, amount: number, method: string, notes?: string) =>
+      req<{ applied: number; remaining: number; settledSaleIds: string[]; hitCaja: boolean }>('/pos/fiados/abonar', {
         method: 'POST',
-        body: JSON.stringify({ amount, paymentMethod: method, notes }),
+        body: JSON.stringify({ clientKey, amount, method, notes }),
       }),
-    settle: (fiadoId: string, method: string) =>
-      req<{ success: boolean }>(`/pos/fiados/${fiadoId}/settle`, {
+    settle: (clientKey: string, method: string) =>
+      req<{ settledSaleIds: string[]; settled: number; totalPaid: number }>('/pos/fiados/settle', {
         method: 'POST',
-        body: JSON.stringify({ paymentMethod: method }),
+        body: JSON.stringify({ clientKey, method }),
       }),
   },
 
