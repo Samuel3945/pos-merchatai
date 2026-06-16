@@ -11,7 +11,7 @@ const RISK_COLORS: Record<string, string> = {
 
 const DEFAULT_METHOD: PaymentMethod = {
   id: 'efectivo', name: 'Efectivo', type: 'cash', icon: 'payments',
-  active: true, start_hour: null, end_hour: null, sort_order: 0,
+  active: true, sort_order: 0,
   details: null, description: null,
 };
 
@@ -28,11 +28,7 @@ function colorForType(type: string): string {
 function isAvailableNow(pm: PaymentMethod): boolean {
   if (!pm.active) return false;
   if (pm.type === 'fiado') return false;
-  if (pm.start_hour === null || pm.end_hour === null) return true;
-  const now = new Date().getHours();
-  return pm.start_hour <= pm.end_hour
-    ? now >= pm.start_hour && now < pm.end_hour
-    : now >= pm.start_hour || now < pm.end_hour;
+  return true;
 }
 
 interface HistoryItem {

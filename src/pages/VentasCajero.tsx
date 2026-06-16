@@ -373,8 +373,8 @@ export default function VentasCajero({ session }: Props) {
                                         api.pos.paymentMethods().then(methods => {
                                           const systemEfectivo: PaymentMethod = {
                                             id: 'system-cash', name: 'Efectivo', type: 'cash',
-                                            icon: 'payments', active: true, start_hour: null,
-                                            end_hour: null, sort_order: 0, details: null, description: null,
+                                            icon: 'payments', active: true,
+                                            sort_order: 0, details: null, description: null,
                                           };
                                           const rest = (Array.isArray(methods) ? methods : [])
                                             .filter(m => m.active && m.type !== 'fiado' && m.type !== 'cash');
@@ -383,8 +383,8 @@ export default function VentasCajero({ session }: Props) {
                                         }).catch(() => {
                                           setRefundPaymentMethods([{
                                             id: 'system-cash', name: 'Efectivo', type: 'cash',
-                                            icon: 'payments', active: true, start_hour: null,
-                                            end_hour: null, sort_order: 0, details: null, description: null,
+                                            icon: 'payments', active: true,
+                                            sort_order: 0, details: null, description: null,
                                           }]);
                                           setReturnRefundMethod('Efectivo');
                                         });
