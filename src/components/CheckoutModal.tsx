@@ -6,7 +6,7 @@ const COP = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('es-CO'
 // Denominaciones más comunes que un cliente entrega en Colombia.
 const QUICK_BILLS = [2000, 5000, 10000, 20000, 50000, 100000];
 
-type Method = { name: string; icon: string; type: string };
+type Method = { name: string; icon: string; type: string; subtitle?: string };
 
 type DraftPayment = {
   method: string;
@@ -34,7 +34,10 @@ interface Props {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Métodos de transferencia: el unificado 'transfer' y los legacy 'nequi'/'llave'.
-// Todos colapsan en un único botón "Transferencia" para el cajero.
+// Cada cuenta se muestra como su propio botón con el nombre que le puso el admin
+// (ej. "Nequi Samuel") y el número de cuenta destino, para que la venta registre
+// A QUÉ cuenta entró la plata. Tesorería atribuye el depósito matcheando ese
+// nombre, así que cada método debe tener un nombre distinto.
 function isTransferType(type: string) {
   return type === 'transfer' || type === 'nequi' || type === 'llave';
 }
@@ -55,15 +58,20 @@ export default function CheckoutModal({ total, paymentMethods, fiadoEnabled, can
   const availableMethods = useMemo<Method[]>(() => {
     const list: Method[] = [];
     const activeCustom = paymentMethods.filter(pm => pm.active);
-    // Todas las cuentas de transferencia se colapsan en un único botón "Transferencia".
-    // Solo se muestran si el cajero tiene permiso para confirmarlas.
-    const hasTransfer = canConfirmTransfers && activeCustom.some(pm => isTransferType(pm.type));
     for (const pm of activeCustom) {
-      if (isTransferType(pm.type)) continue;
+      // Cuentas de transferencia: una por método, con su número de cuenta debajo.
+      // Solo se muestran si el cajero tiene permiso para confirmarlas.
+      if (isTransferType(pm.type)) {
+        if (!canConfirmTransfers) continue;
+        list.push({
+          name: pm.name,
+          icon: pm.icon || 'account_balance',
+          type: pm.type,
+          subtitle: pm.details?.account_number || undefined,
+        });
+        continue;
+      }
       list.push({ name: pm.name, icon: pm.icon || 'payment', type: pm.type });
-    }
-    if (hasTransfer) {
-      list.push({ name: 'Transferencia', icon: 'account_balance', type: 'transfer' });
     }
     // Efectivo siempre disponible — es el medio de pago universal en tienda de barrio.
     if (!list.find(m => m.name === 'Efectivo' || m.type === 'cash')) {
@@ -389,11 +397,14 @@ function PaymentStep(props: PaymentStepProps) {
             const selected = isSinglePayment && primary.method === m.name && Math.abs(primaryAmount - total) < 0.01;
             return (
               <button key={m.name} onClick={() => pickExact(m)}
-                className={`relative h-20 rounded-xl ${t.bg} ${t.hov} text-white font-black flex flex-col items-center justify-center gap-1 transition-all active:scale-[0.97] ${
+                className={`relative h-20 rounded-xl ${t.bg} ${t.hov} text-white font-black flex flex-col items-center justify-center gap-0.5 px-1 transition-all active:scale-[0.97] ${
                   selected ? `ring-2 ${t.ring}` : ''
                 }`}>
-                <span className={`material-symbols-outlined text-[26px] ${t.txt}`}>{m.icon}</span>
-                <span className="text-xs uppercase tracking-wider">{m.name}</span>
+                <span className={`material-symbols-outlined text-[24px] ${t.txt}`}>{m.icon}</span>
+                <span className="w-full text-center text-xs uppercase tracking-wider truncate">{m.name}</span>
+                {m.subtitle && (
+                  <span className="w-full text-center text-[10px] font-semibold text-white/70 tabular-nums truncate">{m.subtitle}</span>
+                )}
                 {selected && (
                   <span className="absolute top-1.5 right-1.5 material-symbols-outlined text-[16px] text-white bg-black/40 rounded-full">check_circle</span>
                 )}
@@ -526,7 +537,12 @@ function PaymentStep(props: PaymentStepProps) {
                 <div key={i} className="bg-[#121212] border border-[#2a2a2a] rounded-xl p-2.5">
                   <div className="flex items-center gap-2 mb-1.5">
                     <span className={`material-symbols-outlined text-[16px] ${t.txt}`}>{meta?.icon || 'payment'}</span>
-                    <span className="text-[#c0c8cb] text-xs font-bold flex-1">{d.method}</span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-[#c0c8cb] text-xs font-bold truncate">{d.method}</span>
+                      {meta?.subtitle && (
+                        <span className="block text-[#8a9295] text-[10px] font-semibold tabular-nums truncate">{meta.subtitle}</span>
+                      )}
+                    </span>
                     {drafts.length > 1 && (
                       <button onClick={() => removeDraft(i)}
                         className="text-[#8a9295] hover:text-[#ffb4ab] p-1 rounded hover:bg-[#93000a]/20">
