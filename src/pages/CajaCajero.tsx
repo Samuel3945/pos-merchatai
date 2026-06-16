@@ -38,6 +38,11 @@ export default function CajaCajero() {
   const [openAmount, setOpenAmount] = useState('');
   const [openNotes, setOpenNotes]   = useState('');
   const [openBusy, setOpenBusy]     = useState(false);
+  const [openExplanation, setOpenExplanation] = useState('');
+  // Carry-over: lo que el cajón debe tener al abrir = último cierre contado. El
+  // backend lo manda en /current cuando no hay sesión abierta (0 si no hay
+  // cierre previo). Si el conteo de apertura no cuadra, se exige explicación.
+  const [expectedOpening, setExpectedOpening] = useState(0);
 
   // Cierre
   const [showClose, setShowClose]     = useState(false);
@@ -73,6 +78,7 @@ export default function CajaCajero() {
       setSession(d.session);
       setMovements(d.movements || []);
       setExpected(typeof d.expected === 'number' ? d.expected : 0);
+      setExpectedOpening(typeof d.expected_opening === 'number' ? d.expected_opening : 0);
     } catch { setError('No se pudo cargar la caja'); }
     finally { setLoading(false); }
   }, []);
@@ -83,10 +89,16 @@ export default function CajaCajero() {
 
   const handleOpen = async () => {
     const amt = parseFloat(openAmount) || 0;
+    // Carry-over: si el cajón debía tener un saldo y el conteo no cuadra, el
+    // cajero debe explicar la diferencia (mismo gate que enforce el backend).
+    const needsExplanation = expectedOpening > 0 && amt !== expectedOpening;
+    if (needsExplanation && !openExplanation.trim()) {
+      setError('Explica la diferencia con lo que cerraste'); return;
+    }
     setOpenBusy(true); setError('');
     try {
-      await api.cash.open(amt, openNotes || undefined);
-      setShowOpen(false); setOpenAmount(''); setOpenNotes('');
+      await api.cash.open(amt, openNotes || undefined, openExplanation.trim() || undefined);
+      setShowOpen(false); setOpenAmount(''); setOpenNotes(''); setOpenExplanation('');
       showOk('Caja abierta');
       // El POS vive en otra pestaña y queda siempre montado: avisarle para que
       // re-evalúe la caja al instante y desbloquee la venta sin esperar el
@@ -175,6 +187,12 @@ export default function CajaCajero() {
   // Cuadre en vivo del cierre: contado − esperado. >0 sobra, <0 falta.
   const countedNum = closeAmount.trim() !== '' ? (parseFloat(closeAmount) || 0) : null;
   const closeDiff  = countedNum != null ? countedNum - expected : null;
+
+  // Cuadre de apertura vs lo que se cerró (carry-over). openDiff = null cuando
+  // no hay expectativa (primera apertura / sin cierre previo) o falta tipear.
+  const openCountedNum = openAmount.trim() !== '' ? (parseFloat(openAmount) || 0) : null;
+  const openDiff = expectedOpening > 0 && openCountedNum != null ? openCountedNum - expectedOpening : null;
+  const openNeedsExplanation = expectedOpening > 0 && (openCountedNum ?? 0) !== expectedOpening;
 
   return (
     <div className="h-full overflow-y-auto bg-[#111415]">
@@ -285,11 +303,41 @@ export default function CajaCajero() {
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
+            {expectedOpening > 0 && (
+              <div className="bg-[#12533a]/20 border border-[#95d4b3]/30 rounded-xl p-3.5 flex items-center justify-between">
+                <div>
+                  <div className="text-[#95d4b3] text-[10px] uppercase tracking-wider font-bold mb-0.5">Deberías abrir con</div>
+                  <div className="text-[#8a9295] text-[11px]">Es lo que cerraste la última vez</div>
+                </div>
+                <div className="text-[#95d4b3] font-black text-xl tabular-nums">{COP(expectedOpening)}</div>
+              </div>
+            )}
             <div>
-              <label className="block text-xs text-[#8a9295] font-semibold uppercase tracking-wider mb-1.5">Efectivo inicial</label>
+              <label className="block text-xs text-[#8a9295] font-semibold uppercase tracking-wider mb-1.5">
+                {expectedOpening > 0 ? 'Efectivo contado' : 'Efectivo inicial'}
+              </label>
               <input type="number" value={openAmount} onChange={e => setOpenAmount(e.target.value)} placeholder="0" autoFocus
                 className="w-full bg-[#121212] border border-[#333] rounded-xl px-4 py-2.5 text-[#e1e2e4] text-sm focus:border-[#9acee1] outline-none transition-colors" />
             </div>
+            {openDiff != null && (
+              <div className={`flex items-center justify-between rounded-xl px-4 py-2.5 text-sm font-bold ${
+                openDiff === 0
+                  ? 'bg-[#12533a]/30 border border-[#95d4b3]/40 text-[#95d4b3]'
+                  : openDiff > 0
+                    ? 'bg-[#0f4c5c]/30 border border-[#9acee1]/40 text-[#9acee1]'
+                    : 'bg-[#3a1010] border border-[#5a1818] text-[#ffb4ab]'
+              }`}>
+                <span>{openDiff === 0 ? 'Coincide con el cierre' : openDiff > 0 ? 'Sobrante' : 'Faltante'}</span>
+                <span className="tabular-nums">{COP(Math.abs(openDiff))}</span>
+              </div>
+            )}
+            {openNeedsExplanation && (
+              <div>
+                <label className="block text-xs text-[#ffb4ab] font-semibold uppercase tracking-wider mb-1.5">¿Qué pasó con la diferencia?</label>
+                <input type="text" value={openExplanation} onChange={e => setOpenExplanation(e.target.value)} placeholder="Explica el faltante o sobrante…"
+                  className="w-full bg-[#121212] border border-[#5a1818] rounded-xl px-4 py-2.5 text-[#e1e2e4] text-sm focus:border-[#ffb4ab] outline-none transition-colors" />
+              </div>
+            )}
             <div>
               <label className="block text-xs text-[#8a9295] font-semibold uppercase tracking-wider mb-1.5">Notas (opcional)</label>
               <input type="text" value={openNotes} onChange={e => setOpenNotes(e.target.value)} placeholder="Observaciones…"
@@ -297,7 +345,7 @@ export default function CajaCajero() {
             </div>
             {error && <div className="text-[#ffb4ab] text-sm">{error}</div>}
             <div className="grid grid-cols-2 gap-2">
-              <button onClick={handleOpen} disabled={openBusy}
+              <button onClick={handleOpen} disabled={openBusy || (openNeedsExplanation && !openExplanation.trim())}
                 className="h-11 bg-[#12533a] hover:bg-[#1a6b45] disabled:opacity-40 text-[#95d4b3] font-bold rounded-xl transition-colors">
                 {openBusy ? 'Abriendo…' : 'Abrir caja'}
               </button>

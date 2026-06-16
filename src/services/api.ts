@@ -204,6 +204,11 @@ export interface CashSession {
   difference: number | null;
   status: 'open' | 'closed';
   notes: string | null;
+  // Carry-over (arqueo): expected at open = last close counted; difference +
+  // explanation captured when the open count doesn't match.
+  opening_expected?: number | null;
+  opening_difference?: number | null;
+  opening_explanation?: string | null;
 }
 
 export type CashMovementType =
@@ -331,13 +336,13 @@ export const api = {
 
   cash: {
     current: () =>
-      req<{ session: CashSession | null; movements: CashMovement[]; expected: number }>(
+      req<{ session: CashSession | null; movements: CashMovement[]; expected: number; expected_opening?: number }>(
         '/pos/cash/current',
       ),
-    open: (openingAmount: number, notes?: string) =>
+    open: (openingAmount: number, notes?: string, explanation?: string) =>
       req<CashSession>('/pos/cash/open', {
         method: 'POST',
-        body: JSON.stringify({ openingAmount, notes }),
+        body: JSON.stringify({ openingAmount, notes, explanation }),
       }),
     close: (countedAmount: number, notes?: string) =>
       req<CashSession>('/pos/cash/close', {
