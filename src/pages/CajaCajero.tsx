@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { api, CashSession, CashMovement, CashMovementType } from '../services/api';
+import { api, CashSession, CashMovement, CashMovementType, SupplierLite } from '../services/api';
 import {
   ENTRY_MOTIVOS,
   EXIT_MOTIVOS,
@@ -53,6 +53,19 @@ export default function CajaCajero() {
   const [moveReason, setMoveReason]     = useState('');
   const [moveBusy, setMoveBusy]         = useState(false);
 
+  // Proveedor — solo para el motivo "Pago a proveedor". Se elige de la lista
+  // activa de la org (/pos/suppliers); si no está, el cajero lo deja en la nota.
+  const [suppliers, setSuppliers]             = useState<SupplierLite[]>([]);
+  const [supplierLoading, setSupplierLoading] = useState(false);
+  const [selectedSupplier, setSelectedSupplier] = useState<SupplierLite | null>(null);
+  const [supplierQuery, setSupplierQuery]     = useState('');
+
+  const resetMovementFields = () => {
+    setMoveReason('');
+    setSelectedSupplier(null);
+    setSupplierQuery('');
+  };
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -101,19 +114,30 @@ export default function CajaCajero() {
   const handleDirection = (dir: 'out' | 'in') => {
     setMovDirection(dir);
     setMotivo(dir === 'out' ? EXIT_MOTIVOS[0].value : ENTRY_MOTIVOS[0].value);
-    setMoveReason('');
+    resetMovementFields();
   };
+
+  // Carga perezosa de proveedores la primera vez que el cajero elige "Pago a
+  // proveedor". Si falla, degradamos a nota libre sin romper el flujo.
+  useEffect(() => {
+    if (motivo !== 'pago_proveedor' || suppliers.length > 0 || supplierLoading) return;
+    setSupplierLoading(true);
+    api.suppliers.list()
+      .then(d => setSuppliers(d.suppliers || []))
+      .catch(() => setSuppliers([]))
+      .finally(() => setSupplierLoading(false));
+  }, [motivo, suppliers.length, supplierLoading]);
 
   const handleMove = async () => {
     const amt = parseFloat(moveAmount);
     if (!amt || amt <= 0) { setError('Ingresa un monto válido'); return; }
     // El motivo ya define el tipo; solo "Otro" exige una descripción escrita.
     if (motivo === 'otro' && !moveReason.trim()) { setError('Describe el motivo'); return; }
-    const { type, reason } = composeMovement(movDirection, motivo, moveReason);
+    const { type, reason } = composeMovement(movDirection, motivo, moveReason, selectedSupplier?.name);
     setMoveBusy(true); setError('');
     try {
-      await api.cash.addMovement(type, amt, reason);
-      setShowMove(false); setMoveAmount(''); setMoveReason('');
+      await api.cash.addMovement(type, amt, reason, selectedSupplier?.id ?? null);
+      setShowMove(false); setMoveAmount(''); resetMovementFields();
       showOk('Movimiento registrado');
       load();
     } catch (e: any) { setError(e.message || 'Error al registrar'); }
@@ -131,6 +155,13 @@ export default function CajaCajero() {
   const isOpen = session?.status === 'open';
   const motivosForDir = movDirection === 'out' ? EXIT_MOTIVOS : ENTRY_MOTIVOS;
   const reasonPresets = REASON_PRESETS[motivo] || [];
+
+  const supplierQ = supplierQuery.trim().toLowerCase();
+  const filteredSuppliers = supplierQ
+    ? suppliers.filter(s =>
+        s.name.toLowerCase().includes(supplierQ)
+        || (s.company || '').toLowerCase().includes(supplierQ))
+    : suppliers;
 
   const totalMov = movements
     .filter(m => m.type !== 'sale')
@@ -383,7 +414,7 @@ export default function CajaCajero() {
               <div className="grid grid-cols-2 gap-2">
                 {motivosForDir.map(opt => (
                   <button key={opt.value} type="button"
-                    onClick={() => { setMotivo(opt.value); setMoveReason(''); }}
+                    onClick={() => { setMotivo(opt.value); resetMovementFields(); }}
                     className={`px-3 py-2 rounded-xl text-sm font-semibold border transition-colors text-left ${
                       motivo === opt.value
                         ? 'bg-[#0f4c5c]/30 border-[#9acee1] text-[#9acee1]'
@@ -394,6 +425,51 @@ export default function CajaCajero() {
                 ))}
               </div>
             </div>
+
+            {/* Proveedor — solo en "Pago a proveedor". Buscar y elegir uno activo;
+                si no aparece, el cajero lo deja en la nota. */}
+            {motivo === 'pago_proveedor' && (
+              <div>
+                <label className="block text-xs text-[#8a9295] font-semibold uppercase tracking-wider mb-1.5">Proveedor</label>
+                {selectedSupplier ? (
+                  <div className="flex items-center justify-between bg-[#0f4c5c]/30 border border-[#9acee1]/40 rounded-xl px-4 py-2.5">
+                    <div className="min-w-0">
+                      <div className="text-[#9acee1] text-sm font-semibold truncate">{selectedSupplier.name}</div>
+                      {selectedSupplier.company && (
+                        <div className="text-[#8a9295] text-xs truncate">{selectedSupplier.company}</div>
+                      )}
+                    </div>
+                    <button type="button" onClick={() => { setSelectedSupplier(null); setSupplierQuery(''); }}
+                      className="text-[#8a9295] text-xs font-semibold hover:text-[#e1e2e4] shrink-0 ml-2">
+                      Cambiar
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <input type="text" value={supplierQuery} onChange={e => setSupplierQuery(e.target.value)}
+                      placeholder="Buscar proveedor…"
+                      className="w-full bg-[#121212] border border-[#333] rounded-xl px-4 py-2.5 text-[#e1e2e4] text-sm focus:border-[#9acee1] outline-none transition-colors" />
+                    {supplierLoading ? (
+                      <div className="text-[#8a9295] text-xs mt-1.5">Cargando proveedores…</div>
+                    ) : suppliers.length === 0 ? (
+                      <div className="text-[#8a9295] text-xs mt-1.5">No hay proveedores registrados. Escribe el nombre en la nota.</div>
+                    ) : filteredSuppliers.length > 0 ? (
+                      <div className="mt-1.5 max-h-40 overflow-y-auto rounded-xl border border-[#2a2a2a] divide-y divide-[#2a2a2a]">
+                        {filteredSuppliers.slice(0, 8).map(s => (
+                          <button key={s.id} type="button" onClick={() => { setSelectedSupplier(s); setSupplierQuery(''); }}
+                            className="w-full text-left px-4 py-2.5 bg-[#1E1E1E] hover:bg-[#282a2b] transition-colors">
+                            <div className="text-[#e1e2e4] text-sm font-medium truncate">{s.name}</div>
+                            {s.company && <div className="text-[#8a9295] text-xs truncate">{s.company}</div>}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-[#8a9295] text-xs mt-1.5">Sin coincidencias. Escribe el nombre en la nota.</div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Monto */}
             <div>

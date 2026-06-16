@@ -292,6 +292,12 @@ export interface Customer {
   last_purchase_at: string | null;
 }
 
+export interface SupplierLite {
+  id: string;
+  name: string;
+  company: string | null;
+}
+
 // ── API surface ───────────────────────────────────────────────────────────────
 
 export const api = {
@@ -340,11 +346,16 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ countedAmount, notes }),
       }),
-    addMovement: (type: CashMovementType, amount: number, reason: string) =>
+    addMovement: (type: CashMovementType, amount: number, reason: string, supplierId?: string | null) =>
       req<CashMovement>('/pos/cash/movement', {
         method: 'POST',
-        body: JSON.stringify({ type, amount, reason }),
+        body: JSON.stringify({ type, amount, reason, supplierId: supplierId ?? null }),
       }),
+  },
+
+  suppliers: {
+    // Active suppliers of the caja's org, for the "Pago a proveedor" select.
+    list: () => req<{ suppliers: SupplierLite[] }>('/pos/suppliers'),
   },
 
   fiados: {
