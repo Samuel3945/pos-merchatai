@@ -1,5 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api, CashSession, CashMovement, CashMovementType } from '../services/api';
+import {
+  ENTRY_MOTIVOS,
+  EXIT_MOTIVOS,
+  REASON_PRESETS,
+  composeMovement,
+  type EntryMotivo,
+  type ExitMotivo,
+} from '../lib/cash-motivos';
 
 const COP = (n: number) => '$' + Math.round(Number(n) || 0).toLocaleString('es-CO');
 
@@ -11,57 +19,7 @@ const MOVEMENT_LABELS: Record<CashMovementType, string> = {
   withdrawal:         'Retiro',
   deposit:            'Depósito',
   adjustment:         'Ajuste',
-};
-
-const OUT_TYPES: CashMovementType[] = ['expense', 'salary', 'inventory_purchase', 'withdrawal'];
-const IN_TYPES:  CashMovementType[] = ['deposit', 'adjustment'];
-
-const REASONS_BY_TYPE: Partial<Record<CashMovementType, string[]>> = {
-  expense: [
-    'Pago de servicios públicos',
-    'Compra de insumos de aseo',
-    'Mantenimiento de equipos',
-    'Transporte / fletes',
-    'Refrigerios / alimentación',
-    'Papelería y útiles',
-    'Publicidad / volantes',
-    'Reparaciones locativas',
-  ],
-  salary: [
-    'Pago quincena',
-    'Pago mensual',
-    'Pago día trabajado',
-    'Pago horas extra',
-    'Bonificación',
-    'Adelanto de salario',
-  ],
-  inventory_purchase: [
-    'Compra inventario - proveedor principal',
-    'Compra inventario - distribuidora',
-    'Compra inventario - mayorista',
-    'Surtido de neveras',
-    'Recarga de cilindro de gas',
-  ],
-  withdrawal: [
-    'Retiro de socios',
-    'Gasto personal del dueño',
-    'Pago a proveedor en efectivo',
-    'Préstamo a empleado',
-    'Pago de crédito',
-  ],
-  deposit: [
-    'Consignación de ventas del día',
-    'Depósito inicial',
-    'Pago de fiado recibido',
-    'Devolución recibida',
-    'Préstamo recibido',
-  ],
-  adjustment: [
-    'Cuadre de caja (sobrante)',
-    'Corrección de error',
-    'Ingreso extraordinario',
-    'Redondeo a favor',
-  ],
+  advance:            'Vale empleado',
 };
 
 export default function CajaCajero() {
@@ -90,7 +48,7 @@ export default function CajaCajero() {
   // Movimiento
   const [showMove, setShowMove]         = useState(false);
   const [movDirection, setMovDirection] = useState<'out' | 'in'>('out');
-  const [moveType, setMoveType]         = useState<CashMovementType>('expense');
+  const [motivo, setMotivo]             = useState<EntryMotivo | ExitMotivo>(EXIT_MOTIVOS[0].value);
   const [moveAmount, setMoveAmount]     = useState('');
   const [moveReason, setMoveReason]     = useState('');
   const [moveBusy, setMoveBusy]         = useState(false);
@@ -142,17 +100,19 @@ export default function CajaCajero() {
 
   const handleDirection = (dir: 'out' | 'in') => {
     setMovDirection(dir);
-    setMoveType(dir === 'out' ? 'expense' : 'deposit');
+    setMotivo(dir === 'out' ? EXIT_MOTIVOS[0].value : ENTRY_MOTIVOS[0].value);
     setMoveReason('');
   };
 
   const handleMove = async () => {
     const amt = parseFloat(moveAmount);
     if (!amt || amt <= 0) { setError('Ingresa un monto válido'); return; }
-    if (!moveReason.trim()) { setError('Selecciona o escribe un motivo'); return; }
+    // El motivo ya define el tipo; solo "Otro" exige una descripción escrita.
+    if (motivo === 'otro' && !moveReason.trim()) { setError('Describe el motivo'); return; }
+    const { type, reason } = composeMovement(movDirection, motivo, moveReason);
     setMoveBusy(true); setError('');
     try {
-      await api.cash.addMovement(moveType, amt, moveReason.trim());
+      await api.cash.addMovement(type, amt, reason);
       setShowMove(false); setMoveAmount(''); setMoveReason('');
       showOk('Movimiento registrado');
       load();
@@ -169,8 +129,8 @@ export default function CajaCajero() {
   }
 
   const isOpen = session?.status === 'open';
-  const typesForDir = movDirection === 'out' ? OUT_TYPES : IN_TYPES;
-  const reasonPresets = REASONS_BY_TYPE[moveType] || [];
+  const motivosForDir = movDirection === 'out' ? EXIT_MOTIVOS : ENTRY_MOTIVOS;
+  const reasonPresets = REASON_PRESETS[motivo] || [];
 
   const totalMov = movements
     .filter(m => m.type !== 'sale')
@@ -417,13 +377,22 @@ export default function CajaCajero() {
               </button>
             </div>
 
-            {/* Tipo */}
+            {/* Motivo */}
             <div>
-              <label className="block text-xs text-[#8a9295] font-semibold uppercase tracking-wider mb-1.5">Tipo</label>
-              <select value={moveType} onChange={e => { setMoveType(e.target.value as CashMovementType); setMoveReason(''); }}
-                className="w-full bg-[#121212] border border-[#333] rounded-xl px-4 py-2.5 text-[#e1e2e4] text-sm focus:border-[#9acee1] outline-none">
-                {typesForDir.map(t => <option key={t} value={t}>{MOVEMENT_LABELS[t]}</option>)}
-              </select>
+              <label className="block text-xs text-[#8a9295] font-semibold uppercase tracking-wider mb-1.5">Motivo</label>
+              <div className="grid grid-cols-2 gap-2">
+                {motivosForDir.map(opt => (
+                  <button key={opt.value} type="button"
+                    onClick={() => { setMotivo(opt.value); setMoveReason(''); }}
+                    className={`px-3 py-2 rounded-xl text-sm font-semibold border transition-colors text-left ${
+                      motivo === opt.value
+                        ? 'bg-[#0f4c5c]/30 border-[#9acee1] text-[#9acee1]'
+                        : 'bg-[#121212] border-[#2a2a2a] text-[#8a9295] hover:text-[#c0c8cb] hover:border-[#444]'
+                    }`}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Monto */}
@@ -433,9 +402,11 @@ export default function CajaCajero() {
                 className="w-full bg-[#121212] border border-[#333] rounded-xl px-4 py-2.5 text-[#e1e2e4] text-sm focus:border-[#9acee1] outline-none transition-colors" />
             </div>
 
-            {/* Motivo con presets */}
+            {/* Nota con presets rápidos */}
             <div>
-              <label className="block text-xs text-[#8a9295] font-semibold uppercase tracking-wider mb-1.5">Motivo</label>
+              <label className="block text-xs text-[#8a9295] font-semibold uppercase tracking-wider mb-1.5">
+                {motivo === 'otro' ? 'Descripción' : 'Nota (opcional)'}
+              </label>
               {reasonPresets.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {reasonPresets.map(r => (
@@ -451,7 +422,7 @@ export default function CajaCajero() {
                 </div>
               )}
               <input type="text" value={moveReason} onChange={e => setMoveReason(e.target.value)}
-                placeholder="O escribe un motivo personalizado…"
+                placeholder={motivo === 'otro' ? 'Describe el motivo…' : 'Detalle adicional…'}
                 className="w-full bg-[#121212] border border-[#333] rounded-xl px-4 py-2.5 text-[#e1e2e4] text-sm focus:border-[#9acee1] outline-none transition-colors" />
             </div>
 
