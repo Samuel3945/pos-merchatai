@@ -2,7 +2,93 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   Design tokens — "Merchant AI Cajero"
+   Two themes driven by [data-theme] on <html>. Values are space-separated RGB
+   channels so Tailwind opacity modifiers (e.g. bg-primary/30) keep working.
+   ───────────────────────────────────────────────────────────────────────────── */
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --tc-bg: 251 250 247;
+  --tc-surface: 255 255 255;
+  --tc-surface-2: 245 243 238;
+  --tc-surface-3: 236 234 227;
+  --tc-line: 229 226 218;
+  --tc-line-strong: 215 211 199;
+
+  --tc-ink: 20 32 28;
+  --tc-ink-2: 58 69 65;
+  --tc-ink-3: 107 115 111;
+  --tc-ink-4: 154 160 156;
+
+  --tc-primary: 15 118 110;
+  --tc-primary-ink: 6 78 71;
+  --tc-primary-soft: 230 242 239;
+
+  --tc-accent: 194 65 12;
+
+  --tc-success: 21 128 61;
+  --tc-success-soft: 230 244 234;
+  --tc-warn: 180 83 9;
+  --tc-warn-soft: 252 241 222;
+  --tc-danger: 185 28 28;
+  --tc-danger-soft: 251 233 233;
+  --tc-info: 29 78 216;
+  --tc-info-soft: 230 237 251;
+
+  --tc-shadow-2: 0 1px 2px rgba(20, 32, 28, 0.04), 0 8px 24px rgba(20, 32, 28, 0.06);
+  --tc-shadow-3: 0 2px 4px rgba(20, 32, 28, 0.06), 0 16px 40px rgba(20, 32, 28, 0.1);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --tc-bg: 14 21 19;
+  --tc-surface: 22 30 27;
+  --tc-surface-2: 30 39 36;
+  --tc-surface-3: 40 51 47;
+  --tc-line: 42 53 49;
+  --tc-line-strong: 58 71 66;
+
+  --tc-ink: 237 239 236;
+  --tc-ink-2: 189 196 192;
+  --tc-ink-3: 139 148 143;
+  --tc-ink-4: 92 102 97;
+
+  --tc-primary: 52 181 168;
+  --tc-primary-ink: 107 211 200;
+  --tc-primary-soft: 20 50 48;
+
+  --tc-accent: 249 115 22;
+
+  --tc-success: 74 222 128;
+  --tc-success-soft: 19 48 34;
+  --tc-warn: 251 191 36;
+  --tc-warn-soft: 46 36 16;
+  --tc-danger: 248 113 113;
+  --tc-danger-soft: 46 24 24;
+  --tc-info: 96 165 250;
+  --tc-info-soft: 17 32 61;
+
+  --tc-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5);
+  --tc-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.4), 0 16px 40px rgba(0, 0, 0, 0.6);
+}
+
 @layer base {
-  body { @apply bg-[#0a0c0d] text-[#e1e2e4]; }
+  body {
+    @apply bg-bg text-ink font-sans;
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: 'ss01', 'cv11';
+    letter-spacing: -0.005em;
+  }
   input, button, select, textarea { @apply outline-none; }
 }
+
+/* Tabular figures helper for money/quantities. */
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* Thin scrollbar used by the filter rows. */
+.scrollbar-thin::-webkit-scrollbar { height: 6px; width: 6px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: rgb(var(--tc-line-strong)); border-radius: 999px; }

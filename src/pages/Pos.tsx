@@ -11,18 +11,7 @@ import {
 } from '../lib/parkedCarts';
 import { useLowStockThreshold } from '../lib/useThresholds';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Modal — Fiado (cliente)
-// ─────────────────────────────────────────────────────────────────────────────
-
-function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="flex justify-between items-center gap-2">
-      <span className="text-[#8a9295] text-xs shrink-0">{label}</span>
-      <span className={`text-[#e1e2e4] text-sm font-semibold text-right ${mono ? 'font-mono' : ''}`}>{value}</span>
-    </div>
-  );
-}
+const cop = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('es-CO')}`;
 
 interface CartItem {
   productId: string;
@@ -51,71 +40,96 @@ function unitPriceFor(product: Product, qty: number): number {
   return best;
 }
 
-// Modal for kg weight input
+// ─────────────────────────────────────────────────────────────────────────────
+// Teclado numérico compartido (modal de peso)
+// ─────────────────────────────────────────────────────────────────────────────
+function Keypad({ onKey }: { onKey: (k: string) => void }) {
+  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del'];
+  return (
+    <div className="grid grid-cols-3 gap-2 mt-3">
+      {keys.map(k => (
+        <button key={k} onClick={() => onKey(k)}
+          className="h-14 rounded-xl border border-line bg-surface-2 text-ink text-xl font-semibold grid place-items-center transition-transform active:scale-[0.96] hover:bg-surface-3">
+          {k === 'del'
+            ? <span className="material-symbols-outlined text-[20px] text-ink-3">backspace</span>
+            : k}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Modal de peso (productos por KG) — teclado + pesos rápidos + subtotal en vivo
+// ─────────────────────────────────────────────────────────────────────────────
 function KgModal({
   product, onConfirm, onCancel,
 }: { product: Product; onConfirm: (qty: number) => void; onCancel: () => void }) {
-  const [weight, setWeight] = useState('1');
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [val, setVal] = useState('');
+  const kg = parseFloat(val || '0') || 0;
+  const subtotal = kg * Number(product.price);
 
-  useEffect(() => { inputRef.current?.focus(); inputRef.current?.select(); }, []);
+  useEffect(() => {
+    const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
+    window.addEventListener('keydown', onEsc);
+    return () => window.removeEventListener('keydown', onEsc);
+  }, [onCancel]);
 
-  const handleConfirm = () => {
-    const q = parseFloat(weight);
-    if (!q || q <= 0) return;
-    onConfirm(q);
+  const onKey = (k: string) => {
+    setVal(v => {
+      if (k === 'del') return v.slice(0, -1);
+      if (k === '.') return v.includes('.') ? v : (v === '' ? '0.' : v + '.');
+      if (v === '0') return k;
+      if (v.replace('.', '').length >= 6) return v;
+      return v + k;
+    });
   };
 
+  const quick = ['0.25', '0.5', '1', '2'];
+
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-[#1E1E1E] border border-[#333333] rounded-2xl w-full max-w-xs p-6 shadow-[0px_8px_24px_rgba(0,0,0,0.5)]">
-        <div className="flex items-center gap-2 mb-4">
-          <span className="material-symbols-outlined text-[#9acee1]">scale</span>
-          <div>
-            <div className="text-[#e1e2e4] font-bold">{product.name}</div>
-            <div className="text-[#8a9295] text-xs">${Number(product.price).toLocaleString('es-CO')} / kg</div>
+    <div className="fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onCancel}>
+      <div className="bg-surface border border-line rounded-[22px] w-full max-w-sm p-5 shadow-token3" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="w-11 h-11 rounded-xl grid place-items-center bg-surface-2 border border-line text-ink-3 shrink-0">
+              <span className="material-symbols-outlined">scale</span>
+            </span>
+            <div className="min-w-0">
+              <div className="text-[17px] font-semibold truncate">{product.name}</div>
+              <div className="text-[13px] text-ink-3">{cop(Number(product.price))} / kg · {Number(product.stock)} kg disp.</div>
+            </div>
           </div>
+          <button onClick={onCancel} className="w-9 h-9 grid place-items-center rounded-lg bg-surface-2 text-ink-2 hover:text-ink shrink-0">
+            <span className="material-symbols-outlined text-[18px]">close</span>
+          </button>
         </div>
 
-        <label className="block text-xs text-[#8a9295] font-semibold uppercase tracking-wider mb-1.5">
-          Peso (kg)
-        </label>
-        <input
-          ref={inputRef}
-          type="number" step="0.01" min="0.01" value={weight}
-          onChange={e => setWeight(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') handleConfirm(); if (e.key === 'Escape') onCancel(); }}
-          className="w-full bg-[#121212] border border-[#9acee1] rounded-xl px-4 py-3 text-[#e1e2e4] text-xl font-bold text-center focus:outline-none mb-1"
-        />
-        {parseFloat(weight) > 0 && (
-          <div className="text-center text-[#9acee1] text-sm mb-4">
-            Subtotal: ${(parseFloat(weight) * Number(product.price)).toLocaleString('es-CO')}
+        <div className="mt-4 p-4 rounded-2xl bg-surface-2 text-center">
+          <div className="text-[10.5px] font-bold uppercase tracking-[0.09em] text-ink-3">Peso a agregar</div>
+          <div className="font-display font-semibold leading-none tracking-tight mt-1.5">
+            <span className="text-[52px] tnum">{val === '' ? '0' : val}</span>
+            <span className="text-[22px] text-ink-3 ml-1.5">kg</span>
           </div>
-        )}
+          <div className="text-[18px] font-bold text-primary mt-2 tnum">{cop(subtotal)}</div>
+        </div>
 
-        {/* Quick weight buttons */}
-        <div className="grid grid-cols-4 gap-1.5 mb-4">
-          {['0.25', '0.5', '1', '2'].map(w => (
-            <button key={w} onClick={() => setWeight(w)}
-              className={`h-9 rounded-lg text-sm font-bold transition-colors ${
-                weight === w ? 'bg-[#0f4c5c] text-[#9acee1] border border-[#9acee1]' : 'bg-[#282a2b] text-[#c0c8cb] hover:bg-[#333536]'
-              }`}>
-              {w}kg
+        <div className="flex gap-2 mt-3">
+          {quick.map(q => (
+            <button key={q} onClick={() => setVal(q)}
+              className="flex-1 h-10 rounded-xl border border-line bg-surface text-ink-2 text-[13px] font-semibold transition-colors hover:border-primary hover:text-primary">
+              {q}kg
             </button>
           ))}
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <button onClick={handleConfirm}
-            disabled={!parseFloat(weight) || parseFloat(weight) <= 0}
-            className="h-12 bg-[#12533a] hover:bg-[#1a6b45] disabled:opacity-40 text-[#95d4b3] font-bold rounded-xl transition-colors active:scale-[0.98]">
-            Agregar
-          </button>
-          <button onClick={onCancel}
-            className="h-12 bg-[#1d2021] hover:bg-[#282a2b] border border-[#333333] text-[#c0c8cb] font-semibold rounded-xl transition-colors">
-            Cancelar
-          </button>
-        </div>
+        <Keypad onKey={onKey} />
+
+        <button onClick={() => kg > 0 && onConfirm(kg)} disabled={kg <= 0}
+          className="w-full h-14 mt-4 rounded-2xl bg-primary hover:bg-primary-ink disabled:opacity-45 disabled:cursor-not-allowed text-white font-bold text-base flex items-center justify-center gap-2 transition-colors">
+          <span className="material-symbols-outlined">add</span>
+          Agregar {kg > 0 ? `· ${cop(subtotal)}` : ''}
+        </button>
       </div>
     </div>
   );
@@ -469,8 +483,8 @@ export default function Pos({ session, onLogout }: Props) {
       const change = payments.reduce((s, p) => s + (p.changeGiven || 0), 0);
       setCart([]); setShowCart(false); setShowCheckout(false);
       setSuccess(change > 0
-        ? `✓ Venta completada — $${total.toLocaleString('es-CO')} · Vuelto: $${change.toLocaleString('es-CO')}`
-        : `✓ Venta completada — $${total.toLocaleString('es-CO')}`);
+        ? `✓ Venta completada — ${cop(total)} · Vuelto: ${cop(change)}`
+        : `✓ Venta completada — ${cop(total)}`);
       setTimeout(() => setSuccess(''), 4000);
       // Si había cola pendiente, intentar drenarla.
       if (queueCount > 0) triggerSync();
@@ -484,7 +498,7 @@ export default function Pos({ session, onLogout }: Props) {
         await refreshQueueCount();
         setOnline(false);
         setCart([]); setShowCart(false); setShowCheckout(false);
-        setSuccess(`📶 Sin conexión — venta guardada localmente ($${total.toLocaleString('es-CO')})`);
+        setSuccess(`📶 Sin conexión — venta guardada localmente (${cop(total)})`);
         setTimeout(() => setSuccess(''), 5000);
       } else {
         // Error real del servidor (validación, stock, etc.) — no encolamos, mostramos error.
@@ -497,44 +511,46 @@ export default function Pos({ session, onLogout }: Props) {
     }
   };
 
-  const borderClass = scanFeedback === 'ok'
-    ? 'border-[#95d4b3]' : scanFeedback === 'err'
-    ? 'border-[#ffb4ab]' : 'border-[#333333] focus-within:border-[#9acee1]';
+  // Borde del buscador: refuerzo visual al escanear. Siempre primary con halo.
+  const searchBorder = scanFeedback === 'ok'
+    ? 'border-success' : scanFeedback === 'err'
+    ? 'border-danger' : 'border-primary';
 
   const CartList = () => (
     <>
       {cart.length === 0 ? (
-        <div className="py-12 text-center text-[#8a9295] text-sm">
-          <span className="material-symbols-outlined text-3xl block mb-2">shopping_cart</span>
-          Carrito vacío
+        <div className="h-full min-h-[180px] flex flex-col items-center justify-center gap-1.5 py-12 text-center">
+          <span className="material-symbols-outlined text-3xl text-ink-4 mb-1">shopping_cart</span>
+          <div className="font-semibold text-ink-2">Carrito vacío</div>
+          <div className="text-[12.5px] text-ink-3">Escanea o toca un producto</div>
         </div>
       ) : cart.map(item => {
         const liveProduct = allProducts.find(p => p.id === item.productId);
         const wholesaleApplied = liveProduct ? item.price < Number(liveProduct.price) : false;
         return (
-        <div key={item.productId} className="flex items-center gap-3 px-4 py-3 border-b border-[#333333] last:border-0">
+        <div key={item.productId} className="flex items-center gap-3 px-4 py-3 border-b border-line last:border-0">
           <div className="flex-1 min-w-0">
-            <div className="text-[#e1e2e4] text-sm font-medium truncate">{item.name}</div>
-            <div className="text-[#8a9295] text-xs flex items-center gap-1.5">
-              ${item.price.toLocaleString('es-CO')} {item.unitType === 'kg' ? '/ kg' : 'c/u'}
+            <div className="text-sm font-medium truncate">{item.name}</div>
+            <div className="text-ink-3 text-xs flex items-center gap-1.5 tnum">
+              {cop(item.price)} {item.unitType === 'kg' ? '/ kg' : 'c/u'}
               {wholesaleApplied && (
-                <span className="px-1.5 py-px rounded-full bg-[#0f4c5c] text-[#9acee1] text-[10px] font-bold">
+                <span className="px-1.5 py-px rounded-full bg-primary-soft text-primary text-[10px] font-bold">
                   Mayoreo
                 </span>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5 bg-surface-2 rounded-lg p-0.5">
             <button onClick={() => updateQty(item.productId, -1)}
-              className="w-7 h-7 rounded-lg bg-[#1d2021] hover:bg-[#282a2b] text-[#e1e2e4] flex items-center justify-center font-bold transition-colors">−</button>
-            <span className="min-w-[2.5rem] text-center text-[#e1e2e4] font-bold text-sm">
+              className="w-7 h-7 rounded-md bg-surface hover:bg-primary-soft hover:text-primary text-ink flex items-center justify-center font-bold shadow-token2 transition-colors">−</button>
+            <span className="min-w-[2.25rem] text-center font-bold text-sm tnum">
               {item.unitType === 'kg' ? `${Number(item.qty)}kg` : Math.round(Number(item.qty))}
             </span>
             <button onClick={() => updateQty(item.productId, 1)}
-              className="w-7 h-7 rounded-lg bg-[#1d2021] hover:bg-[#282a2b] text-[#e1e2e4] flex items-center justify-center font-bold transition-colors">+</button>
+              className="w-7 h-7 rounded-md bg-surface hover:bg-primary-soft hover:text-primary text-ink flex items-center justify-center font-bold shadow-token2 transition-colors">+</button>
           </div>
-          <div className="w-16 text-right text-[#9acee1] font-semibold text-sm">
-            ${(item.price * item.qty).toLocaleString('es-CO')}
+          <div className="w-16 text-right font-bold text-sm tnum">
+            {cop(item.price * item.qty)}
           </div>
         </div>
         );
@@ -542,21 +558,47 @@ export default function Pos({ session, onLogout }: Props) {
     </>
   );
 
+  // Chips de ventas en espera (mockup) — recuperar al tocar, descartar con la x.
+  const HeldChips = () => (
+    <div className="px-3 py-2.5 border-b border-line bg-surface-2">
+      <div className="flex items-center gap-1.5 mb-2">
+        <span className="material-symbols-outlined text-[14px] text-warn">schedule</span>
+        <span className="text-[10.5px] font-bold uppercase tracking-[0.07em] text-warn">En espera ({parkedCarts.length})</span>
+        <button onClick={() => setShowParked(true)}
+          className="ml-auto text-[11px] font-semibold text-ink-3 hover:text-ink">Ver todas</button>
+      </div>
+      <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-0.5">
+        {parkedCarts.map(c => (
+          <button key={c.id} onClick={() => handleRecallParked(c)} title="Reanudar venta"
+            className="shrink-0 flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-surface border border-warn/60 text-xs transition-colors hover:bg-warn-soft">
+            <span className="font-bold text-warn max-w-[90px] truncate">{c.label}</span>
+            <span className="tnum">{cop(c.total)}</span>
+            <span className="text-ink-3">{c.items.length} ít.</span>
+            <span role="button" onClick={e => { e.stopPropagation(); handleDiscardParked(c.id); }}
+              className="grid place-items-center w-4 h-4 rounded text-ink-4 hover:text-danger">
+              <span className="material-symbols-outlined text-[12px]">close</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
   // Bloquea el POS si la caja está cerrada (esperamos confirmación del servidor)
   if (cashOpen === false) {
     return (
-      <div className="h-full flex flex-col items-center justify-center gap-5 bg-[#0a0c0d] px-6 text-center">
-        <span className="material-symbols-outlined text-6xl text-[#40484b]">lock</span>
+      <div className="h-full flex flex-col items-center justify-center gap-5 bg-bg px-6 text-center">
+        <span className="material-symbols-outlined text-6xl text-ink-4">lock</span>
         <div>
-          <div className="text-[#e1e2e4] font-black text-xl">Caja cerrada</div>
-          <div className="text-[#8a9295] text-sm mt-1 max-w-xs">
+          <div className="font-extrabold text-xl">Caja cerrada</div>
+          <div className="text-ink-3 text-sm mt-1 max-w-xs">
             Para usar el POS necesitas abrir la caja primero.
-            Ve a la pestaña <strong className="text-[#9acee1]">Caja</strong> y abre el turno.
+            Ve a la pestaña <strong className="text-primary">Caja</strong> y abre el turno.
           </div>
         </div>
         <button
           onClick={() => { setCashOpen(null); loadFromServer(); }}
-          className="flex items-center gap-2 px-5 h-11 bg-[#0f4c5c] hover:bg-[#155a6d] text-[#9acee1] font-bold rounded-xl text-sm transition-colors active:scale-95">
+          className="flex items-center gap-2 px-5 h-11 bg-primary-soft hover:bg-primary/20 text-primary font-bold rounded-xl text-sm transition-colors active:scale-95">
           <span className="material-symbols-outlined text-[18px]">refresh</span>
           Verificar de nuevo
         </button>
@@ -565,7 +607,7 @@ export default function Pos({ session, onLogout }: Props) {
   }
 
   return (
-    <div className="relative flex h-full overflow-hidden bg-[#0a0c0d] text-[#e1e2e4]">
+    <div className="relative flex h-full overflow-hidden bg-bg text-ink">
       {/* Checkout modal — mixed payments + change calculator */}
       {showCheckout && (
         <CheckoutModal
@@ -582,26 +624,26 @@ export default function Pos({ session, onLogout }: Props) {
 
       {/* Queued sales modal */}
       {showQueue && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-[#1E1E1E] border border-[#333333] rounded-2xl w-full max-w-lg max-h-[85vh] flex flex-col shadow-[0px_8px_32px_rgba(0,0,0,0.6)]">
-            <div className="px-5 py-4 border-b border-[#333333] flex items-center justify-between">
+        <div className="fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-surface border border-line rounded-[22px] w-full max-w-lg max-h-[85vh] flex flex-col shadow-token3">
+            <div className="px-5 py-4 border-b border-line flex items-center justify-between">
               <div>
-                <div className="text-[#e1e2e4] font-bold flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[#ffba27]">sync_problem</span>
+                <div className="font-bold flex items-center gap-2">
+                  <span className="material-symbols-outlined text-warn">sync_problem</span>
                   Ventas pendientes ({queuedSales.length})
                 </div>
-                <div className="text-[#8a9295] text-xs mt-0.5">
+                <div className="text-ink-3 text-xs mt-0.5">
                   Guardadas localmente sin enviar al servidor
                 </div>
               </div>
-              <button onClick={() => setShowQueue(false)} className="text-[#8a9295] hover:text-[#e1e2e4]">
+              <button onClick={() => setShowQueue(false)} className="text-ink-3 hover:text-ink">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
 
             <div className="flex-1 overflow-y-auto">
               {queuedSales.length === 0 ? (
-                <div className="py-12 text-center text-[#8a9295] text-sm">
+                <div className="py-12 text-center text-ink-3 text-sm">
                   <span className="material-symbols-outlined text-3xl block mb-2">check_circle</span>
                   No hay ventas pendientes
                 </div>
@@ -611,15 +653,15 @@ export default function Pos({ session, onLogout }: Props) {
                 const liveCount = sale.items.filter(it => allProducts.some(p => p.id === it.productId)).length;
                 const missingCount = sale.items.length - liveCount;
                 return (
-                  <div key={sale.localId} className="px-5 py-3 border-b border-[#333333] last:border-0">
+                  <div key={sale.localId} className="px-5 py-3 border-b border-line last:border-0">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-baseline gap-3">
-                          <span className="text-[#9acee1] font-bold">${sale.total.toLocaleString('es-CO')}</span>
-                          <span className="text-[#8a9295] text-xs">{sale.paymentType}</span>
-                          <span className="text-[#8a9295] text-xs">· {sale.items.length} ítem{sale.items.length !== 1 ? 's' : ''}</span>
+                          <span className="text-primary font-bold tnum">{cop(sale.total)}</span>
+                          <span className="text-ink-3 text-xs">{sale.paymentType}</span>
+                          <span className="text-ink-3 text-xs">· {sale.items.length} ítem{sale.items.length !== 1 ? 's' : ''}</span>
                         </div>
-                        <div className="text-[#8a9295] text-xs mt-0.5">
+                        <div className="text-ink-3 text-xs mt-0.5">
                           {date.toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                         </div>
                         {/* Items detail with names from cache */}
@@ -629,24 +671,24 @@ export default function Pos({ session, onLogout }: Props) {
                             const live = allProducts.some(p => p.id === it.productId);
                             return (
                               <li key={idx} className="text-xs flex items-center gap-2">
-                                <span className={live ? 'text-[#95d4b3]' : 'text-[#ffb4ab]'}>
+                                <span className={live ? 'text-success' : 'text-danger'}>
                                   {live ? '●' : '○'}
                                 </span>
-                                <span className="text-[#c0c8cb]">
+                                <span className="text-ink-2">
                                   {cached?.name || `(producto eliminado: ${it.productId.slice(0, 8)}…)`}
                                 </span>
-                                <span className="text-[#8a9295]">× {it.qty}</span>
+                                <span className="text-ink-3">× {it.qty}</span>
                               </li>
                             );
                           })}
                         </ul>
                         {err && (
-                          <div className="text-[#ffb4ab] text-xs bg-[#93000a]/30 px-2 py-1 rounded mt-1.5">
+                          <div className="text-danger text-xs bg-danger-soft px-2 py-1 rounded mt-1.5">
                             ⚠ {err}
                           </div>
                         )}
                         {missingCount > 0 && !err && (
-                          <div className="text-[#ffba27] text-xs mt-1.5">
+                          <div className="text-warn text-xs mt-1.5">
                             ⚠ {missingCount} producto{missingCount > 1 ? 's' : ''} ya no existe{missingCount > 1 ? 'n' : ''} — esta venta no se puede sincronizar
                           </div>
                         )}
@@ -659,12 +701,12 @@ export default function Pos({ session, onLogout }: Props) {
                             setSuccess(`✓ ${r.loaded} ítem${r.loaded !== 1 ? 's' : ''} cargado${r.loaded !== 1 ? 's' : ''} al carrito${r.missing ? ` (${r.missing} producto(s) ya no existen)` : ''}`);
                             setTimeout(() => setSuccess(''), 5000);
                           }}
-                            className="px-3 py-1.5 bg-[#0f4c5c] hover:bg-[#155a6d] text-[#9acee1] text-xs font-semibold rounded-lg transition-colors whitespace-nowrap">
+                            className="px-3 py-1.5 bg-primary-soft hover:bg-primary/20 text-primary text-xs font-semibold rounded-lg transition-colors whitespace-nowrap">
                             Cargar al carrito
                           </button>
                         )}
                         <button onClick={() => discardQueuedSale(sale.localId!)}
-                          className="px-3 py-1.5 bg-[#1d2021] hover:bg-[#93000a]/40 border border-[#333333] hover:border-[#ffb4ab]/50 text-[#ffb4ab] text-xs font-semibold rounded-lg transition-colors">
+                          className="px-3 py-1.5 bg-surface-2 hover:bg-danger-soft border border-line hover:border-danger text-danger text-xs font-semibold rounded-lg transition-colors">
                           Descartar
                         </button>
                       </div>
@@ -674,19 +716,19 @@ export default function Pos({ session, onLogout }: Props) {
               })}
             </div>
 
-            <div className="px-5 py-3 border-t border-[#333333] flex gap-2">
+            <div className="px-5 py-3 border-t border-line flex gap-2">
               <button onClick={triggerSync} disabled={syncingQueue || queuedSales.length === 0}
-                className="flex-1 h-11 bg-[#0f4c5c] hover:bg-[#155a6d] disabled:opacity-40 text-[#9acee1] font-bold rounded-xl transition-colors flex items-center justify-center gap-2">
+                className="flex-1 h-11 bg-primary-soft hover:bg-primary/20 disabled:opacity-40 text-primary font-bold rounded-xl transition-colors flex items-center justify-center gap-2">
                 <span className="material-symbols-outlined text-[18px]">sync</span>
                 {syncingQueue ? 'Sincronizando…' : 'Reintentar todas'}
               </button>
               <button onClick={() => setShowQueue(false)}
-                className="px-4 h-11 bg-[#1d2021] hover:bg-[#282a2b] border border-[#333333] text-[#c0c8cb] font-semibold rounded-xl transition-colors">
+                className="px-4 h-11 bg-surface-2 hover:bg-surface-3 border border-line text-ink-2 font-semibold rounded-xl transition-colors">
                 Cerrar
               </button>
             </div>
             {Object.keys(queueErrors).length > 0 && (
-              <div className="px-5 pb-3 text-[10px] text-[#8a9295] leading-snug">
+              <div className="px-5 pb-3 text-[10px] text-ink-3 leading-snug">
                 Las ventas con error suelen referenciar productos que ya no existen en el catálogo.
                 Estas no son recuperables — descártalas para limpiar la cola.
               </div>
@@ -726,31 +768,31 @@ export default function Pos({ session, onLogout }: Props) {
         />
       )}
 
-      {/* ── Cash topbar (distintivo del cajero web) ────────────────────────── */}
-      <div className="hidden lg:flex flex-col items-center w-14 bg-[#121212] border-r border-[#333] py-3 gap-3">
-        <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-             style={{ background: session.cash.color || 'linear-gradient(135deg,#9acee1,#95d4b3)' }}>
-          <span className="material-symbols-outlined text-[#0a0c0d]">point_of_sale</span>
-        </div>
-        <div className="flex-1" />
-        <button onClick={onLogout} title="Cerrar sesión"
-          className="w-9 h-9 flex items-center justify-center text-[#8a9295] hover:text-[#ffb4ab] rounded-lg hover:bg-[#1a1a1a]">
-          <span className="material-symbols-outlined text-[20px]">logout</span>
-        </button>
-      </div>
-
-      {/* Left: search + grid */}
+      {/* ── Main: búsqueda + grilla ───────────────────────────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <div className="px-4 pt-4 pb-3 shrink-0 space-y-2">
-          <div className={`relative flex items-center bg-[#121212] border rounded-xl transition-colors ${borderClass}`}>
-            <span className="material-symbols-outlined absolute left-4 text-[#8a9295]">barcode_scanner</span>
+        <div className="px-4 pt-4 pb-3 shrink-0 space-y-3">
+          {/* Buscador / lector */}
+          <div className={`relative flex items-center gap-3 h-[54px] px-4 bg-surface border-[1.5px] rounded-2xl transition-colors ${searchBorder}`}
+               style={{ boxShadow: '0 0 0 4px rgb(var(--tc-primary) / 0.12)' }}>
+            <span className="material-symbols-outlined text-ink-3">barcode_scanner</span>
             <input ref={searchRef} type="text" value={query}
               onChange={e => handleQuery(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Buscar o escanear código de barras..."
-              className="w-full bg-transparent py-3.5 pl-12 pr-4 text-[#e1e2e4] placeholder-[#8a9295] text-base"
+              placeholder="Buscar o escanear código de barras…"
+              className="flex-1 bg-transparent text-base text-ink placeholder-ink-4"
               autoComplete="off" />
+            {query && (
+              <button onClick={() => { setQuery(''); setResults(allProducts); searchRef.current?.focus(); }}
+                className="w-6 h-6 grid place-items-center rounded-md text-ink-3 hover:text-ink">
+                <span className="material-symbols-outlined text-[16px]">close</span>
+              </button>
+            )}
+            <span className="hidden sm:inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-success-soft text-success text-[11.5px] font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-success" />
+              Lector listo
+            </span>
           </div>
+
           {/* Filtros rápidos: categorías + unidad + características */}
           <CategoryFilterRow
             products={allProducts}
@@ -759,38 +801,33 @@ export default function Pos({ session, onLogout }: Props) {
             attr={attrFilter} setAttr={setAttrFilter}
             categoryFilter={categoryFilter}
           />
-          <div className="flex items-center gap-3 px-1 flex-wrap">
-            <div className={`flex items-center gap-1.5 text-xs font-semibold ${online ? 'text-[#95d4b3]' : 'text-[#ffba27]'}`}>
-              <span className={`w-2 h-2 rounded-full ${online ? 'bg-[#95d4b3]' : 'bg-[#ffba27]'}`} />
+
+          {/* Estado + conteo */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className={`inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[11.5px] font-semibold ${online ? 'bg-success-soft text-success' : 'bg-warn-soft text-warn'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${online ? 'bg-success' : 'bg-warn'}`} />
               {online ? 'En línea' : 'Sin conexión'}
-            </div>
-            {parkedCarts.length > 0 && (
-              <button onClick={() => setShowParked(true)}
-                className="flex items-center gap-1 text-xs font-bold text-[#ffba27] hover:text-[#e9a700] bg-[#5d4000]/30 hover:bg-[#5d4000]/60 px-2 py-1 rounded-full transition-colors">
-                <span className="material-symbols-outlined text-[14px]">pause_circle</span>
-                {parkedCarts.length} en espera
-              </button>
-            )}
+            </span>
             {queueCount > 0 && (
               <button onClick={() => { refreshQueue(); setShowQueue(true); }}
-                className="flex items-center gap-1 text-xs text-[#ffba27] hover:text-[#e9a700]">
+                className="inline-flex items-center gap-1 text-xs font-semibold text-warn hover:opacity-80">
                 <span className="material-symbols-outlined text-[14px]">sync_problem</span>
                 {queueCount} venta{queueCount > 1 ? 's' : ''} pendiente{queueCount > 1 ? 's' : ''}
               </button>
             )}
-            <span className="text-[#8a9295] text-xs ml-auto">
+            <span className="text-ink-3 text-xs ml-auto truncate max-w-[160px]">
               {session.cash.label || session.cash.deviceName}
             </span>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 pb-36">
+        <div className="flex-1 overflow-y-auto px-4 pb-36 lg:pb-4">
           {success && (
-            <div className="mb-3 px-4 py-2 bg-[#12533a] border border-[#95d4b3] text-[#95d4b3] rounded-xl text-sm font-semibold">
+            <div className="mb-3 px-4 py-2.5 bg-success-soft border border-success/40 text-success rounded-xl text-sm font-semibold">
               {success}
             </div>
           )}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+          <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(148px,1fr))]">
             {results
               .filter(p => categoryFilter === 'all' ? true : (p.category || 'Sin categoría') === categoryFilter)
               .filter(p => unitFilter === 'all' ? true : p.unit_type === unitFilter)
@@ -803,42 +840,41 @@ export default function Pos({ session, onLogout }: Props) {
                 const attrs = p.attributes ?? {};
                 return String(attrs[k] ?? '') === v;
               })
-              .map(p => (
-              <button key={p.id} onClick={() => handleProductClick(p)}
-                disabled={p.stock <= 0}
-                className="bg-[#1E1E1E] border border-[#333333] rounded-xl p-4 flex flex-col justify-between aspect-square text-left transition-all active:scale-[0.97] hover:border-[#9acee1] group disabled:opacity-40 disabled:cursor-not-allowed relative">
-                {/* kg badge */}
-                {p.unit_type === 'kg' && (
-                  <span className="absolute top-2 right-2 bg-[#0f4c5c] text-[#9acee1] text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider">kg</span>
-                )}
-                <div className="flex justify-between items-start">
-                  <span className="text-[#e1e2e4] font-semibold text-sm leading-tight pr-6">{p.name}</span>
-                  <span className="material-symbols-outlined text-[#8a9295] group-hover:text-[#9acee1] transition-colors text-[20px] shrink-0 absolute top-3 right-3 opacity-0 group-hover:opacity-100">
-                    {catIcon(p.category)}
+              .map(p => {
+                const out = p.stock <= 0;
+                const low = !out && p.unit_type === 'unit' && p.stock <= lowStockThreshold(p.id);
+                return (
+              <button key={p.id} onClick={() => handleProductClick(p)} disabled={out}
+                className="group relative flex flex-col gap-2.5 min-h-[150px] text-left rounded-2xl border border-line bg-surface p-3 transition-all hover:-translate-y-0.5 hover:border-primary hover:shadow-token2 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed">
+                <div className="flex items-start justify-between">
+                  <span className="w-12 h-12 rounded-xl grid place-items-center bg-surface-2 border border-line text-ink-3 group-hover:text-primary transition-colors">
+                    <span className="material-symbols-outlined text-[24px]">{catIcon(p.category)}</span>
+                  </span>
+                  {p.unit_type === 'kg' && (
+                    <span className="text-[10px] font-extrabold tracking-wider text-white bg-info px-1.5 py-0.5 rounded-md">KG</span>
+                  )}
+                </div>
+                <div className="text-[13.5px] font-semibold leading-snug flex-1">{p.name}</div>
+                <div className="flex items-end justify-between gap-2">
+                  {out ? (
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-danger">Sin stock</span>
+                  ) : p.unit_type === 'kg' ? (
+                    <span className="text-[11px] text-ink-3 tnum">{Number(p.stock)} kg disp.</span>
+                  ) : low ? (
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-warn">Solo {Math.round(Number(p.stock))}</span>
+                  ) : (
+                    <span className="text-[11px] text-ink-3 tnum">{Math.round(Number(p.stock))} uds</span>
+                  )}
+                  <span className="text-primary font-bold text-[17px] tnum">
+                    {cop(Number(p.price))}{p.unit_type === 'kg' && <small className="text-ink-3 text-[11px] font-semibold ml-0.5">/kg</small>}
                   </span>
                 </div>
-                <div className="mt-auto">
-                  {p.unit_type === 'kg' ? (
-                    <span className="text-[10px] font-bold text-[#8a9295] uppercase">
-                      {p.stock <= 0 ? 'Sin stock' : `${Number(p.stock)} kg disp.`}
-                    </span>
-                  ) : (
-                    p.stock <= lowStockThreshold(p.id) && p.stock > 0
-                      ? <span className="text-[10px] font-bold text-[#ffba27] uppercase">Solo {Math.round(Number(p.stock))}</span>
-                      : p.stock <= 0
-                      ? <span className="text-[10px] font-bold text-[#ffb4ab] uppercase">Sin stock</span>
-                      : null
-                  )}
-                  <div className="text-right mt-1">
-                    <span className="text-[#9acee1] font-bold text-lg">${Number(p.price).toLocaleString('es-CO')}</span>
-                    {p.unit_type === 'kg' && <span className="text-[#8a9295] text-[10px] ml-0.5">/kg</span>}
-                  </div>
-                </div>
               </button>
-            ))}
+                );
+              })}
             {results.length === 0 && (
-              <div className="col-span-full py-16 text-center text-[#8a9295]">
-                <span className="material-symbols-outlined text-4xl block mb-2">search_off</span>
+              <div className="col-span-full py-16 flex flex-col items-center gap-2 text-ink-4">
+                <span className="material-symbols-outlined text-4xl">search_off</span>
                 Sin resultados
               </div>
             )}
@@ -846,86 +882,88 @@ export default function Pos({ session, onLogout }: Props) {
         </div>
       </div>
 
-      {/* Desktop cart */}
-      <div className="hidden lg:flex w-80 flex-col bg-[#121212] border-l border-[#333333]">
-        <div className="px-4 py-3 border-b border-[#333333] flex items-center justify-between">
-          <span className="font-semibold text-[#e1e2e4]">
-            Carrito {itemCount > 0 && <span className="text-[#9acee1]">({itemCount})</span>}
-          </span>
-          {cart.length > 0 && (
-            <div className="flex items-center gap-3">
-              <button onClick={() => setShowParkPrompt(true)}
-                className="text-xs font-bold text-[#ffba27] hover:text-[#e9a700] flex items-center gap-1">
-                <span className="material-symbols-outlined text-[14px]">pause_circle</span>
-                Pausar
-              </button>
-              <button onClick={() => setCart([])} className="text-xs text-[#8a9295] hover:text-[#ffb4ab]">Vaciar</button>
+      {/* ── Carrito (desktop) ─────────────────────────────────────────────── */}
+      <aside className="hidden lg:flex w-[clamp(340px,27vw,400px)] flex-col bg-surface border-l border-line">
+        <div className="px-4 py-3 border-b border-line flex items-center justify-between">
+          <div>
+            <div className="text-[10.5px] font-bold uppercase tracking-[0.09em] text-ink-3">Carrito</div>
+            <div className="text-[14.5px] font-semibold mt-0.5">
+              {itemCount > 0 ? `${itemCount} ítem${itemCount !== 1 ? 's' : ''}` : 'Cliente mostrador'}
             </div>
+          </div>
+          {cart.length > 0 && (
+            <button onClick={() => setCart([])} title="Vaciar"
+              className="w-8 h-8 grid place-items-center rounded-lg text-ink-3 hover:text-danger hover:bg-surface-2 transition-colors">
+              <span className="material-symbols-outlined text-[18px]">delete_sweep</span>
+            </button>
           )}
         </div>
-        <div className="flex-1 overflow-y-auto"><CartList /></div>
-        <div className="border-t border-[#333333] p-4 space-y-3">
-          {error && <div className="text-[#ffb4ab] text-xs bg-[#93000a]/30 border border-[#93000a]/50 px-3 py-2 rounded-lg">{error}</div>}
-          <div className="flex justify-between items-baseline">
-            <span className="text-[#8a9295] text-sm font-semibold uppercase tracking-wider">Total</span>
-            <span className="text-white font-black text-3xl tracking-tight">${total.toLocaleString('es-CO')}</span>
-          </div>
-          <button
-            onClick={() => setShowCheckout(true)}
-            disabled={!cart.length || loading}
-            className="w-full h-14 bg-[#12533a] hover:bg-[#1a6b45] disabled:opacity-40 disabled:cursor-not-allowed text-[#95d4b3] font-black text-base rounded-xl transition-colors active:scale-[0.98] flex items-center justify-center gap-2">
-            <span className="material-symbols-outlined">point_of_sale</span>
-            {loading ? 'Procesando…' : 'Cobrar'}
-          </button>
-          {!online && <p className="text-[#ffba27] text-xs text-center">Sin conexión — se guarda localmente</p>}
-        </div>
-      </div>
 
-      {/* Mobile footer */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#121212] border-t border-[#333333]">
-        <div className="flex items-center justify-between px-6 py-3">
+        {parkedCarts.length > 0 && <HeldChips />}
+
+        <div className="flex-1 overflow-y-auto"><CartList /></div>
+
+        <div className="border-t border-line p-4 bg-surface-2 space-y-3">
+          {error && <div className="text-danger text-xs bg-danger-soft border border-danger/40 px-3 py-2 rounded-lg">{error}</div>}
+          <button onClick={() => setShowParkPrompt(true)} disabled={!cart.length}
+            className="w-full h-11 flex items-center justify-center gap-2 rounded-xl bg-surface border border-line-strong text-warn font-semibold text-[13.5px] transition-colors hover:bg-warn-soft hover:border-warn disabled:opacity-40 disabled:cursor-not-allowed disabled:text-ink-3 disabled:hover:bg-surface">
+            <span className="material-symbols-outlined text-[18px]">schedule</span>
+            Dejar en espera
+          </button>
+          <div className="flex items-baseline justify-between">
+            <span className="text-[15px] font-semibold">Total</span>
+            <span className="font-display font-semibold text-[34px] leading-none tracking-tight tnum">{cop(total)}</span>
+          </div>
+          <button onClick={() => setShowCheckout(true)} disabled={!cart.length || loading}
+            className="w-full h-[60px] rounded-2xl bg-primary hover:bg-primary-ink disabled:opacity-45 disabled:cursor-not-allowed text-white font-bold text-[17px] flex items-center justify-center gap-2.5 transition-colors active:scale-[0.99]">
+            <span className="material-symbols-outlined">point_of_sale</span>
+            {loading ? 'Procesando…' : `Cobrar ${cart.length ? cop(total) : ''}`}
+          </button>
+          {!online && <p className="text-warn text-xs text-center">Sin conexión — se guarda localmente</p>}
+        </div>
+      </aside>
+
+      {/* ── Footer (mobile) ───────────────────────────────────────────────── */}
+      <div className="lg:hidden fixed bottom-[57px] left-0 right-0 z-40 bg-surface border-t border-line">
+        <div className="flex items-center justify-between px-5 py-2.5">
           <div className="flex items-center gap-3">
-            <span className="text-[#8a9295] text-sm font-semibold">Items: {itemCount}</span>
-            <div className="w-px h-4 bg-[#333333]" />
-            <button onClick={() => setShowCart(!showCart)} className="text-[#9acee1] text-sm font-semibold">
+            <span className="text-ink-3 text-sm font-semibold">Ítems: {itemCount}</span>
+            <div className="w-px h-4 bg-line" />
+            <button onClick={() => setShowCart(!showCart)} className="text-primary text-sm font-semibold">
               {showCart ? 'Cerrar' : 'Ver carrito'}
             </button>
             {cart.length > 0 && (
               <>
-                <div className="w-px h-4 bg-[#333333]" />
-                <button onClick={() => setShowParkPrompt(true)} className="text-[#ffba27] text-sm font-semibold flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[16px]">pause_circle</span>
-                  Pausar
+                <div className="w-px h-4 bg-line" />
+                <button onClick={() => setShowParkPrompt(true)} className="text-warn text-sm font-semibold flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[16px]">schedule</span>
+                  Esperar
                 </button>
               </>
             )}
           </div>
-          <span className="text-white font-black text-2xl tracking-tight">${total.toLocaleString('es-CO')}</span>
+          <span className="font-display font-semibold text-[26px] leading-none tracking-tight tnum">{cop(total)}</span>
         </div>
-        {error && <div className="mx-4 mb-2 text-[#ffb4ab] text-xs">{error}</div>}
+        {error && <div className="mx-4 mb-2 text-danger text-xs">{error}</div>}
         <button onClick={() => setShowCheckout(true)} disabled={!cart.length || loading}
-          className="w-full h-14 bg-[#12533a] disabled:opacity-40 disabled:cursor-not-allowed text-[#95d4b3] font-black text-sm flex items-center justify-center gap-2">
+          className="w-full h-14 bg-primary hover:bg-primary-ink disabled:opacity-45 disabled:cursor-not-allowed text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors">
           <span className="material-symbols-outlined">point_of_sale</span>
           {loading ? 'Procesando…' : 'Cobrar'}
         </button>
       </div>
 
-      {/* Mobile cart sheet */}
+      {/* ── Cart sheet (mobile) ───────────────────────────────────────────── */}
       {showCart && (
         <div className="lg:hidden fixed inset-0 z-50 flex flex-col justify-end">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setShowCart(false)} />
-          <div className="relative bg-[#1E1E1E] rounded-t-2xl border-t border-[#333333] max-h-[70vh] flex flex-col">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[#333333]">
-              <span className="font-semibold text-[#e1e2e4]">Carrito ({itemCount})</span>
-              <div className="flex items-center gap-2">
-                <button onClick={onLogout} className="text-[#8a9295] hover:text-[#ffb4ab] p-1.5 rounded-lg" title="Cerrar sesión">
-                  <span className="material-symbols-outlined text-[20px]">logout</span>
-                </button>
-                <button onClick={() => setShowCart(false)} className="text-[#8a9295]">
-                  <span className="material-symbols-outlined">close</span>
-                </button>
-              </div>
+          <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={() => setShowCart(false)} />
+          <div className="relative bg-surface rounded-t-[22px] border-t border-line max-h-[72vh] flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-line">
+              <span className="font-semibold">Carrito ({itemCount})</span>
+              <button onClick={() => setShowCart(false)} className="text-ink-3 hover:text-ink">
+                <span className="material-symbols-outlined">close</span>
+              </button>
             </div>
+            {parkedCarts.length > 0 && <HeldChips />}
             <div className="overflow-y-auto"><CartList /></div>
           </div>
         </div>
@@ -936,6 +974,7 @@ export default function Pos({ session, onLogout }: Props) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Fila de chips para filtro rápido (categorías + unidad + características)
+// Las características solo aparecen al elegir una categoría concreta.
 // ─────────────────────────────────────────────────────────────────────────────
 function CategoryFilterRow({
   products, category, setCategory, unit, setUnit, attr, setAttr, categoryFilter,
@@ -989,36 +1028,38 @@ function CategoryFilterRow({
 
   if (categories.length === 0) return null;
 
+  const pill = (active: boolean) =>
+    `shrink-0 h-9 px-4 rounded-xl text-[12.5px] font-bold tracking-[0.02em] whitespace-nowrap transition-colors border ${
+      active
+        ? 'bg-primary border-primary text-white'
+        : 'bg-surface border-line text-ink-2 hover:border-line-strong hover:text-ink'
+    }`;
+
+  // Sólo mostramos características cuando hay una categoría concreta seleccionada.
+  const showFacets = categoryFilter !== 'all' && attrGroups.length > 0;
+
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-thin">
-        <button onClick={() => setCategory('all')}
-          className={`shrink-0 text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full transition-colors ${
-            category === 'all' ? 'bg-[#0f4c5c] text-[#9acee1]' : 'bg-[#1d2021] text-[#8a9295] hover:text-[#c0c8cb]'
-          }`}>
-          Todas
-        </button>
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 overflow-x-auto pb-0.5 scrollbar-thin">
+        <button onClick={() => setCategory('all')} className={pill(category === 'all')}>Todas</button>
         {categories.map(cat => (
-          <button key={cat} onClick={() => setCategory(cat)}
-            className={`shrink-0 text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full transition-colors flex items-center gap-1 ${
-              category === cat ? 'bg-[#0f4c5c] text-[#9acee1]' : 'bg-[#1d2021] text-[#8a9295] hover:text-[#c0c8cb]'
-            }`}>
-            <span className="material-symbols-outlined text-[12px]">{catIcon(cat)}</span>
+          <button key={cat} onClick={() => setCategory(cat)} className={`${pill(category === cat)} inline-flex items-center gap-1.5`}>
+            <span className="material-symbols-outlined text-[14px]">{catIcon(cat)}</span>
             {cat}
           </button>
         ))}
         {hasKg && (
           <>
-            <div className="shrink-0 w-px h-5 bg-[#2a2a2a] mx-1" />
+            <div className="shrink-0 w-px h-6 bg-line mx-0.5" />
             <button onClick={() => setUnit(unit === 'unit' ? 'all' : 'unit')}
-              className={`shrink-0 text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full transition-colors ${
-                unit === 'unit' ? 'bg-[#3d1c4d] text-[#d4a3ff]' : 'bg-[#1d2021] text-[#8a9295] hover:text-[#c0c8cb]'
+              className={`shrink-0 h-9 px-3.5 rounded-xl text-[12.5px] font-bold whitespace-nowrap transition-colors border ${
+                unit === 'unit' ? 'bg-info border-info text-white' : 'bg-surface border-line text-ink-2 hover:text-ink hover:border-line-strong'
               }`}>
               Por unidad
             </button>
             <button onClick={() => setUnit(unit === 'kg' ? 'all' : 'kg')}
-              className={`shrink-0 text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full transition-colors ${
-                unit === 'kg' ? 'bg-[#3d1c4d] text-[#d4a3ff]' : 'bg-[#1d2021] text-[#8a9295] hover:text-[#c0c8cb]'
+              className={`shrink-0 h-9 px-3.5 rounded-xl text-[12.5px] font-bold whitespace-nowrap transition-colors border ${
+                unit === 'kg' ? 'bg-info border-info text-white' : 'bg-surface border-line text-ink-2 hover:text-ink hover:border-line-strong'
               }`}>
               Por kg
             </button>
@@ -1026,12 +1067,12 @@ function CategoryFilterRow({
         )}
       </div>
 
-      {attrGroups.length > 0 && (
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-thin">
-          <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-[#50575a] pr-1">Características</span>
+      {showFacets && (
+        <div className="flex items-center gap-2 flex-wrap p-2.5 rounded-xl bg-surface-2 border border-line">
+          <span className="text-[10.5px] font-bold uppercase tracking-[0.09em] text-ink-3 pr-0.5">Características</span>
           <button onClick={() => setAttr('all')}
-            className={`shrink-0 text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full transition-colors ${
-              attr === 'all' ? 'bg-[#5d4000]/40 text-[#ffba27]' : 'bg-[#1d2021] text-[#8a9295] hover:text-[#c0c8cb]'
+            className={`h-7 px-3 rounded-full text-[12px] font-semibold transition-colors border ${
+              attr === 'all' ? 'bg-accent border-accent text-white' : 'bg-surface border-line text-ink-2 hover:border-line-strong'
             }`}>
             Todas
           </button>
@@ -1040,11 +1081,11 @@ function CategoryFilterRow({
             const active = attr === id;
             return (
               <button key={id} onClick={() => setAttr(active ? 'all' : id)}
-                className={`shrink-0 text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full transition-colors flex items-center gap-1 ${
-                  active ? 'bg-[#5d4000]/40 text-[#ffba27]' : 'bg-[#1d2021] text-[#8a9295] hover:text-[#c0c8cb]'
+                className={`h-7 px-3 rounded-full text-[12px] font-semibold transition-colors border inline-flex items-center gap-1 ${
+                  active ? 'bg-accent border-accent text-white' : 'bg-surface border-line text-ink-2 hover:border-line-strong'
                 }`}
                 title={`${group.key}: ${val}`}>
-                <span className="opacity-60 normal-case">{group.key}:</span>
+                <span className={active ? 'text-white/75' : 'text-ink-4'}>{group.key}:</span>
                 <span>{val}</span>
               </button>
             );
@@ -1069,36 +1110,36 @@ function ParkCartPrompt({
   const submit = () => onConfirm(label);
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-[#1E1E1E] border border-[#333] rounded-2xl w-full max-w-sm p-5 shadow-[0px_8px_32px_rgba(0,0,0,0.6)]">
+    <div className="fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onCancel}>
+      <div className="bg-surface border border-line rounded-[22px] w-full max-w-sm p-5 shadow-token3" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-xl bg-[#5d4000] flex items-center justify-center">
-            <span className="material-symbols-outlined text-[#ffba27]">pause_circle</span>
+          <div className="w-10 h-10 rounded-xl bg-warn-soft flex items-center justify-center">
+            <span className="material-symbols-outlined text-warn">schedule</span>
           </div>
           <div>
-            <div className="text-[#e1e2e4] font-bold">Pausar venta</div>
-            <div className="text-[#8a9295] text-xs">{itemCount} ítem{itemCount !== 1 ? 's' : ''} · ${total.toLocaleString('es-CO')}</div>
+            <div className="font-bold">Dejar en espera</div>
+            <div className="text-ink-3 text-xs tnum">{itemCount} ítem{itemCount !== 1 ? 's' : ''} · {cop(total)}</div>
           </div>
         </div>
 
-        <p className="text-[#8a9295] text-xs mb-3">
-          Si lo dejas vacío, lo guardamos como <span className="text-[#ffba27] font-semibold">{suggested}</span>. Los nombres son únicos y se enumeran en orden.
+        <p className="text-ink-3 text-xs mb-3">
+          Si lo dejas vacío, lo guardamos como <span className="text-warn font-semibold">{suggested}</span>. Los nombres son únicos y se enumeran en orden.
         </p>
 
         <input ref={inputRef} type="text" value={label}
           onChange={e => setLabel(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') onCancel(); }}
           placeholder={suggested}
-          className="w-full bg-[#121212] border border-[#5d4000] rounded-xl px-4 py-3 text-[#e1e2e4] focus:border-[#ffba27] outline-none mb-4" />
+          className="w-full bg-surface-2 border border-warn/60 rounded-xl px-4 py-3 text-ink focus:border-warn outline-none mb-4" />
 
         <div className="grid grid-cols-2 gap-2">
           <button onClick={submit}
-            className="h-12 bg-[#5d4000] hover:bg-[#6d4d00] border border-[#ffba27]/40 text-[#ffba27] font-bold rounded-xl transition-colors active:scale-[0.98] flex items-center justify-center gap-2">
-            <span className="material-symbols-outlined text-[18px]">pause_circle</span>
-            Pausar
+            className="h-12 bg-warn-soft hover:bg-warn/20 border border-warn/50 text-warn font-bold rounded-xl transition-colors active:scale-[0.98] flex items-center justify-center gap-2">
+            <span className="material-symbols-outlined text-[18px]">schedule</span>
+            En espera
           </button>
           <button onClick={onCancel}
-            className="h-12 bg-[#1d2021] hover:bg-[#282a2b] border border-[#333] text-[#c0c8cb] font-semibold rounded-xl transition-colors">
+            className="h-12 bg-surface-2 hover:bg-surface-3 border border-line text-ink-2 font-semibold rounded-xl transition-colors">
             Cancelar
           </button>
         </div>
@@ -1124,27 +1165,27 @@ function ParkedCartsModal({
   const [editLabel, setEditLabel] = useState('');
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-[#1E1E1E] border border-[#333] rounded-2xl w-full max-w-lg max-h-[85vh] flex flex-col shadow-[0px_8px_32px_rgba(0,0,0,0.6)]">
-        <div className="px-5 py-4 border-b border-[#333] flex items-center justify-between">
+    <div className="fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-surface border border-line rounded-[22px] w-full max-w-lg max-h-[85vh] flex flex-col shadow-token3" onClick={e => e.stopPropagation()}>
+        <div className="px-5 py-4 border-b border-line flex items-center justify-between">
           <div>
-            <div className="text-[#e1e2e4] font-bold flex items-center gap-2">
-              <span className="material-symbols-outlined text-[#ffba27]">pause_circle</span>
+            <div className="font-bold flex items-center gap-2">
+              <span className="material-symbols-outlined text-warn">schedule</span>
               Cuentas en espera ({carts.length})
             </div>
-            <div className="text-[#8a9295] text-xs mt-0.5">
+            <div className="text-ink-3 text-xs mt-0.5">
               Recupéralas cuando el cliente vuelva o cuando termine de buscar.
             </div>
           </div>
-          <button onClick={onClose} className="text-[#8a9295] hover:text-[#e1e2e4]">
+          <button onClick={onClose} className="text-ink-3 hover:text-ink">
             <span className="material-symbols-outlined">close</span>
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto">
           {carts.length === 0 ? (
-            <div className="py-12 text-center text-[#8a9295] text-sm">
-              <span className="material-symbols-outlined text-3xl block mb-2">pause_circle</span>
+            <div className="py-12 text-center text-ink-3 text-sm">
+              <span className="material-symbols-outlined text-3xl block mb-2">schedule</span>
               No hay ventas pausadas
             </div>
           ) : carts.map(c => {
@@ -1152,7 +1193,7 @@ function ParkedCartsModal({
             const missing = c.items.length - liveCount;
             const date = new Date(c.parkedAt);
             return (
-              <div key={c.id} className="px-5 py-3 border-b border-[#333] last:border-0">
+              <div key={c.id} className="px-5 py-3 border-b border-line last:border-0">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     {editingId === c.id ? (
@@ -1163,24 +1204,24 @@ function ParkedCartsModal({
                             if (e.key === 'Enter') { onRename(c.id, editLabel); setEditingId(null); }
                             if (e.key === 'Escape') setEditingId(null);
                           }}
-                          className="flex-1 bg-[#121212] border border-[#ffba27] rounded-lg px-2 py-1 text-[#e1e2e4] text-sm" />
+                          className="flex-1 bg-surface-2 border border-warn rounded-lg px-2 py-1 text-ink text-sm" />
                         <button onClick={() => { onRename(c.id, editLabel); setEditingId(null); }}
-                          className="text-[#95d4b3] hover:text-white text-xs font-bold">OK</button>
+                          className="text-success hover:opacity-80 text-xs font-bold">OK</button>
                       </div>
                     ) : (
                       <button onClick={() => { setEditingId(c.id); setEditLabel(c.label); }}
-                        className="text-left text-[#e1e2e4] font-bold hover:text-[#ffba27] flex items-center gap-1">
+                        className="text-left font-bold hover:text-warn flex items-center gap-1">
                         {c.label}
-                        <span className="material-symbols-outlined text-[14px] text-[#40484b]">edit</span>
+                        <span className="material-symbols-outlined text-[14px] text-ink-4">edit</span>
                       </button>
                     )}
                     <div className="flex items-baseline gap-3 mt-0.5">
-                      <span className="text-[#9acee1] font-bold">${c.total.toLocaleString('es-CO')}</span>
-                      <span className="text-[#8a9295] text-xs">· {c.items.length} ítem{c.items.length !== 1 ? 's' : ''}</span>
-                      <span className="text-[#8a9295] text-xs">· {date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</span>
+                      <span className="text-primary font-bold tnum">{cop(c.total)}</span>
+                      <span className="text-ink-3 text-xs">· {c.items.length} ítem{c.items.length !== 1 ? 's' : ''}</span>
+                      <span className="text-ink-3 text-xs">· {date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
                     {missing > 0 && (
-                      <div className="text-[#ffba27] text-[11px] mt-1">
+                      <div className="text-warn text-[11px] mt-1">
                         ⚠ {missing} producto{missing > 1 ? 's' : ''} ya no existe{missing > 1 ? 'n' : ''}
                       </div>
                     )}
@@ -1188,13 +1229,13 @@ function ParkedCartsModal({
                   <div className="shrink-0 flex flex-col gap-1.5">
                     {liveCount > 0 && (
                       <button onClick={() => onRecall(c)}
-                        className="px-3 py-1.5 bg-[#0f4c5c] hover:bg-[#155a6d] text-[#9acee1] text-xs font-semibold rounded-lg transition-colors flex items-center gap-1 whitespace-nowrap">
+                        className="px-3 py-1.5 bg-primary-soft hover:bg-primary/20 text-primary text-xs font-semibold rounded-lg transition-colors flex items-center gap-1 whitespace-nowrap">
                         <span className="material-symbols-outlined text-[14px]">play_arrow</span>
                         Reanudar
                       </button>
                     )}
                     <button onClick={() => onDiscard(c.id)}
-                      className="px-3 py-1.5 bg-[#1d2021] hover:bg-[#93000a]/40 border border-[#333] hover:border-[#ffb4ab]/50 text-[#ffb4ab] text-xs font-semibold rounded-lg transition-colors">
+                      className="px-3 py-1.5 bg-surface-2 hover:bg-danger-soft border border-line hover:border-danger text-danger text-xs font-semibold rounded-lg transition-colors">
                       Descartar
                     </button>
                   </div>
@@ -1204,9 +1245,9 @@ function ParkedCartsModal({
           })}
         </div>
 
-        <div className="px-5 py-3 border-t border-[#333]">
+        <div className="px-5 py-3 border-t border-line">
           <button onClick={onClose}
-            className="w-full h-11 bg-[#1d2021] hover:bg-[#282a2b] border border-[#333] text-[#c0c8cb] font-semibold rounded-xl transition-colors">
+            className="w-full h-11 bg-surface-2 hover:bg-surface-3 border border-line text-ink-2 font-semibold rounded-xl transition-colors">
             Cerrar
           </button>
         </div>

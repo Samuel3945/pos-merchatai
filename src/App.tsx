@@ -10,6 +10,7 @@ import { loadSession, saveSession, clearSession, type PosSession } from './lib/s
 import { getActiveCashier, setActiveCashier } from './services/api';
 
 type Tab = 'pos' | 'caja' | 'fiados' | 'ventas' | 'clientes';
+type Theme = 'dark' | 'light';
 
 type Screen =
   | { kind: 'login' }
@@ -26,6 +27,11 @@ function initialScreen(): Screen {
     : { kind: 'selectCashier', session: s };
 }
 
+function initialTheme(): Theme {
+  const saved = localStorage.getItem('mc-theme');
+  return saved === 'light' ? 'light' : 'dark';
+}
+
 const TABS: Array<{ id: Tab; icon: string; label: string }> = [
   { id: 'pos',      icon: 'point_of_sale',          label: 'POS'      },
   { id: 'caja',     icon: 'account_balance_wallet',  label: 'Caja'     },
@@ -34,9 +40,22 @@ const TABS: Array<{ id: Tab; icon: string; label: string }> = [
   { id: 'clientes', icon: 'groups',                  label: 'Clientes' },
 ];
 
+// Iniciales para el avatar del empleado (máx. 2).
+function initialsOf(name: string) {
+  return name.split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+}
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>(initialScreen);
   const [tab, setTab] = useState<Tab>('pos');
+  const [theme, setTheme] = useState<Theme>(initialTheme);
+
+  // Aplica el tema al <html> y lo persiste. El index.html arranca en dark para
+  // evitar flash; aquí sincronizamos con la preferencia guardada.
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('mc-theme', theme);
+  }, [theme]);
 
   useEffect(() => {
     const handleExpired = () => {
@@ -90,6 +109,8 @@ export default function App() {
     setScreen({ kind: 'login' });
   }
 
+  const toggleTheme = () => setTheme(t => (t === 'dark' ? 'light' : 'dark'));
+
   if (screen.kind === 'login') {
     return <Login onLoggedIn={onLoggedIn} />;
   }
@@ -108,32 +129,47 @@ export default function App() {
   const activeCashier = getActiveCashier();
 
   return (
-    <div className="flex flex-col h-screen bg-[#111415] overflow-hidden">
-      {/* Header */}
-      <header className="shrink-0 bg-[#121212] border-b border-[#222] flex items-center justify-between px-4 h-12">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
-               style={{ background: 'linear-gradient(135deg,#9acee1,#95d4b3)' }}>
-            <span className="text-[#0a0c0d] font-black text-xs">A</span>
+    <div className="flex flex-col h-screen bg-bg text-ink overflow-hidden">
+      {/* ── Top bar ───────────────────────────────────────────────────────── */}
+      <header className="shrink-0 bg-surface border-b border-line flex items-center justify-between gap-2 px-3 sm:px-4 h-14">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-xl grid place-items-center shrink-0 text-white font-extrabold text-sm shadow-token2"
+               style={{ background: 'linear-gradient(140deg, rgb(var(--tc-primary)), rgb(var(--tc-primary-ink)))' }}>
+            M
           </div>
-          <span className="text-white font-bold text-sm tracking-tight">Merchant AI Cajero</span>
+          <div className="flex items-baseline gap-2 min-w-0">
+            <span className="font-bold tracking-tight text-[15px] truncate">
+              Merchant <span className="text-primary font-extrabold">AI</span>
+            </span>
+            <span className="hidden sm:inline text-[10px] font-bold uppercase tracking-[0.14em] text-ink-3 border border-line rounded-full px-2 py-0.5">
+              Cajero
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
+
+        <div className="flex items-center gap-2">
           {activeCashier && (
             <button onClick={() => onSwitchCashier(session)}
-              className="flex items-center gap-1.5 text-[#9acee1] hover:text-white text-xs font-medium transition-colors"
+              className="flex items-center gap-2 h-9 pl-1 pr-2.5 rounded-full bg-surface-2 border border-line hover:border-line-strong transition-colors"
               title="Cambiar de empleado">
-              <span className="material-symbols-outlined text-[16px]">switch_account</span>
-              <span className="truncate max-w-[120px]">{activeCashier.name}</span>
+              <span className="w-6 h-6 rounded-lg grid place-items-center text-white text-[10px] font-bold"
+                    style={{ background: session.cash.color || 'rgb(var(--tc-primary))' }}>
+                {initialsOf(activeCashier.name)}
+              </span>
+              <span className="text-[13px] font-semibold truncate max-w-[88px]">{activeCashier.name.split(' ')[0]}</span>
+              <span className="material-symbols-outlined text-[16px] text-ink-3">unfold_more</span>
             </button>
           )}
-          <span className="text-[#8a9295] text-xs hidden sm:block truncate max-w-[120px]">
-            {session.cash.label || session.cash.deviceName}
-          </span>
+          <button onClick={toggleTheme}
+            className="flex items-center gap-1.5 h-9 px-3 rounded-full bg-surface-2 border border-line hover:border-line-strong text-ink-2 text-[13px] font-semibold transition-colors"
+            title="Cambiar tema">
+            <span className="material-symbols-outlined text-[18px]">{theme === 'dark' ? 'light_mode' : 'dark_mode'}</span>
+            <span className="hidden sm:inline">{theme === 'dark' ? 'Claro' : 'Oscuro'}</span>
+          </button>
           <button onClick={onLogout}
-            className="flex items-center gap-1 text-[#8a9295] hover:text-[#ffb4ab] text-xs font-medium transition-colors">
-            <span className="material-symbols-outlined text-[16px]">logout</span>
-            <span className="hidden sm:inline">Salir</span>
+            className="w-9 h-9 grid place-items-center rounded-full text-ink-3 hover:text-danger hover:bg-surface-2 transition-colors"
+            title="Salir">
+            <span className="material-symbols-outlined text-[20px]">logout</span>
           </button>
         </div>
       </header>
@@ -152,21 +188,21 @@ export default function App() {
         {tab === 'clientes' && <ClientesCajero />}
       </main>
 
-      {/* Bottom nav */}
-      <nav className="shrink-0 bg-[#121212] border-t border-[#222] flex">
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors ${
-              tab === t.id
-                ? 'text-[#9acee1]'
-                : 'text-[#40484b] hover:text-[#8a9295]'
-            }`}>
-            <span className={`material-symbols-outlined text-[22px] ${tab === t.id ? 'text-[#9acee1]' : ''}`}>
-              {t.icon}
-            </span>
-            <span className="text-[10px] font-semibold">{t.label}</span>
-          </button>
-        ))}
+      {/* ── Bottom nav ────────────────────────────────────────────────────── */}
+      <nav className="shrink-0 bg-surface border-t border-line flex">
+        {TABS.map(t => {
+          const active = tab === t.id;
+          return (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors ${
+                active ? 'text-primary' : 'text-ink-4 hover:text-ink-2'
+              }`}>
+              {active && <span className="absolute top-0 h-0.5 w-8 rounded-full bg-primary" />}
+              <span className="material-symbols-outlined text-[22px]">{t.icon}</span>
+              <span className="text-[10px] font-semibold">{t.label}</span>
+            </button>
+          );
+        })}
       </nav>
     </div>
   );
