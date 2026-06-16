@@ -210,7 +210,7 @@ export interface CashSession {
 
 export type CashMovementType =
   | 'sale' | 'expense' | 'salary' | 'inventory_purchase'
-  | 'withdrawal' | 'deposit' | 'adjustment';
+  | 'withdrawal' | 'deposit' | 'adjustment' | 'advance';
 
 export interface CashMovement {
   id: string;
