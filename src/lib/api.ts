@@ -111,8 +111,6 @@ export interface PaymentMethod {
   type:         PaymentMethodType;
   icon:         string;
   active:       boolean;
-  start_hour:   number | null;
-  end_hour:     number | null;
   sort_order:   number;
   details:      PaymentMethodDetails | null;
   description:  string | null;
