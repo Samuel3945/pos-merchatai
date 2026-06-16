@@ -30,7 +30,7 @@ interface Props {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Estilos compartidos por método (background + texto + acento de borde)
+// Estilos compartidos por método (tinte suave + acento, theme-aware via tokens)
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Métodos de transferencia: el unificado 'transfer' y los legacy 'nequi'/'llave'.
@@ -43,11 +43,11 @@ function isTransferType(type: string) {
 }
 
 function methodTheme(type: string, _name: string) {
-  if (type === 'cash')   return { bg: 'bg-[#0c4029]', hov: 'hover:bg-[#12533a]', txt: 'text-[#95d4b3]', ring: 'ring-[#95d4b3]', soft: 'bg-[#12533a]/30' };
-  if (type === 'fiado')  return { bg: 'bg-[#5d4000]', hov: 'hover:bg-[#6d4d00]', txt: 'text-[#ffba27]', ring: 'ring-[#ffba27]', soft: 'bg-[#5d4000]/30' };
-  if (type === 'card')   return { bg: 'bg-[#1a3a5c]', hov: 'hover:bg-[#234d75]', txt: 'text-[#9acee1]', ring: 'ring-[#9acee1]', soft: 'bg-[#1a3a5c]/30' };
-  // 'transfer' (y cualquier otro tipo) → mismo tema azul de transferencia.
-  return { bg: 'bg-[#0f4c5c]', hov: 'hover:bg-[#155a6d]', txt: 'text-[#9acee1]', ring: 'ring-[#9acee1]', soft: 'bg-[#0f4c5c]/30' };
+  if (type === 'cash')   return { soft: 'bg-success-soft', txt: 'text-success', ring: 'ring-success', border: 'border-success' };
+  if (type === 'fiado')  return { soft: 'bg-warn-soft',    txt: 'text-warn',    ring: 'ring-warn',    border: 'border-warn' };
+  if (type === 'card')   return { soft: 'bg-info-soft',    txt: 'text-info',    ring: 'ring-info',    border: 'border-info' };
+  // 'transfer' (y cualquier otro tipo) → tema primary.
+  return { soft: 'bg-primary-soft', txt: 'text-primary', ring: 'ring-primary', border: 'border-primary' };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -224,27 +224,27 @@ export default function CheckoutModal({ total, paymentMethods, fiadoEnabled, can
   // Render por paso
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-3">
-      <div className="bg-[#1E1E1E] border border-[#333] rounded-2xl w-full max-w-2xl max-h-[95vh] overflow-y-auto shadow-[0px_12px_40px_rgba(0,0,0,0.7)]">
+    <div className="fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-3">
+      <div className="bg-surface border border-line rounded-[22px] w-full max-w-2xl max-h-[95vh] overflow-y-auto shadow-token3">
         {/* Header con total enorme — siempre visible */}
-        <div className="px-6 pt-5 pb-4 border-b border-[#2a2a2a] sticky top-0 bg-[#1E1E1E] z-10">
+        <div className="px-6 pt-5 pb-4 border-b border-line sticky top-0 bg-surface z-10">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="text-[#8a9295] text-[11px] font-bold uppercase tracking-widest">Total a cobrar</div>
-              <div className="text-white font-black text-4xl sm:text-5xl tracking-tight tabular-nums">{COP(total)}</div>
+              <div className="text-ink-3 text-[11px] font-bold uppercase tracking-widest">Total a cobrar</div>
+              <div className="font-display font-semibold text-4xl sm:text-5xl tracking-tight tnum">{COP(total)}</div>
               {step === 'payment' && totals.remaining > 0 && totals.appliedToBill > 0 && (
-                <div className="text-[#ffba27] text-xs font-semibold mt-1">
-                  Falta: <span className="font-black">{COP(totals.remaining)}</span>
+                <div className="text-warn text-xs font-semibold mt-1">
+                  Falta: <span className="font-extrabold">{COP(totals.remaining)}</span>
                 </div>
               )}
               {step === 'payment' && totals.change > 0 && totals.remaining === 0 && (
-                <div className="text-[#95d4b3] text-xs font-semibold mt-1">
-                  Pago completo · vuelto: <span className="font-black">{COP(totals.change)}</span>
+                <div className="text-success text-xs font-semibold mt-1">
+                  Pago completo · vuelto: <span className="font-extrabold">{COP(totals.change)}</span>
                 </div>
               )}
             </div>
             <button onClick={onCancel} aria-label="Cerrar"
-              className="text-[#8a9295] hover:text-white p-1.5 rounded-lg hover:bg-[#282a2b] shrink-0">
+              className="text-ink-3 hover:text-ink p-1.5 rounded-lg hover:bg-surface-2 shrink-0">
               <span className="material-symbols-outlined">close</span>
             </button>
           </div>
@@ -252,9 +252,9 @@ export default function CheckoutModal({ total, paymentMethods, fiadoEnabled, can
 
         <div className="p-5">
           {step === 'payment' && !canConfirmTransfers && (
-            <div className="mb-4 flex items-start gap-2.5 bg-[#5d4000]/20 border border-[#ffba27]/40 rounded-xl px-3 py-2.5">
-              <span className="material-symbols-outlined text-[#ffba27] text-[18px] mt-0.5 shrink-0">info</span>
-              <p className="text-[#ffba27] text-xs leading-snug">
+            <div className="mb-4 flex items-start gap-2.5 bg-warn-soft border border-warn/40 rounded-xl px-3 py-2.5">
+              <span className="material-symbols-outlined text-warn text-[18px] mt-0.5 shrink-0">info</span>
+              <p className="text-warn text-xs leading-snug">
                 Los pagos por transferencia bancaria deben ser confirmados por el administrador. Solo aparecen métodos que puedes verificar directamente.
               </p>
             </div>
@@ -306,20 +306,20 @@ export default function CheckoutModal({ total, paymentMethods, fiadoEnabled, can
             />
           )}
 
-          {error && <div className="mt-3 text-[#ffb4ab] text-sm bg-[#93000a]/30 border border-[#93000a] px-3 py-2 rounded-lg">{error}</div>}
+          {error && <div className="mt-3 text-danger text-sm bg-danger-soft border border-danger/50 px-3 py-2 rounded-lg">{error}</div>}
         </div>
 
         {/* Footer del paso de pago */}
         {step === 'payment' && (
-          <div className="px-5 pb-5 pt-1 border-t border-[#2a2a2a] sticky bottom-0 bg-[#1E1E1E]">
+          <div className="px-5 pb-5 pt-1 border-t border-line sticky bottom-0 bg-surface">
             <div className="grid grid-cols-[1fr_auto] gap-2">
               <button onClick={advanceToInvoice} disabled={!canConfirm || loading}
-                className="h-14 bg-[#12533a] hover:bg-[#1a6b45] disabled:opacity-40 disabled:cursor-not-allowed text-[#95d4b3] font-black text-base rounded-xl transition-colors active:scale-[0.98] flex items-center justify-center gap-2">
+                className="h-14 bg-primary hover:bg-primary-ink disabled:opacity-45 disabled:cursor-not-allowed text-white font-bold text-base rounded-2xl transition-colors active:scale-[0.98] flex items-center justify-center gap-2">
                 <span className="material-symbols-outlined">arrow_forward</span>
                 {loading ? 'Procesando…' : usingFiado ? 'Registrar fiado' : `Cobrar ${COP(total)}`}
               </button>
               <button onClick={onCancel}
-                className="h-14 px-4 bg-[#1d2021] hover:bg-[#282a2b] border border-[#333] text-[#c0c8cb] font-semibold rounded-xl transition-colors">
+                className="h-14 px-4 bg-surface-2 hover:bg-surface-3 border border-line text-ink-2 font-semibold rounded-2xl transition-colors">
                 Cancelar
               </button>
             </div>
@@ -380,11 +380,11 @@ function PaymentStep(props: PaymentStepProps) {
       {/* Tiles grandes — un tap basta */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[#8a9295] text-[11px] font-bold uppercase tracking-widest">Método de pago</span>
+          <span className="text-ink-3 text-[11px] font-bold uppercase tracking-widest">Método de pago</span>
           {allowMultiple && (
             <button onClick={() => setCombineMode(!combineMode)}
               className={`text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md transition-colors ${
-                combineMode ? 'bg-[#0f4c5c] text-[#9acee1]' : 'bg-[#282a2b] text-[#8a9295] hover:text-[#9acee1]'
+                combineMode ? 'bg-primary-soft text-primary' : 'bg-surface-2 text-ink-3 hover:text-primary'
               }`}>
               {combineMode ? '✓ Pago mixto' : '+ Combinar métodos'}
             </button>
@@ -397,16 +397,16 @@ function PaymentStep(props: PaymentStepProps) {
             const selected = isSinglePayment && primary.method === m.name && Math.abs(primaryAmount - total) < 0.01;
             return (
               <button key={m.name} onClick={() => pickExact(m)}
-                className={`relative h-20 rounded-xl ${t.bg} ${t.hov} text-white font-black flex flex-col items-center justify-center gap-0.5 px-1 transition-all active:scale-[0.97] ${
-                  selected ? `ring-2 ${t.ring}` : ''
+                className={`relative h-20 rounded-xl ${t.soft} border flex flex-col items-center justify-center gap-0.5 px-1 transition-all active:scale-[0.97] ${
+                  selected ? `${t.border} ring-2 ${t.ring}` : 'border-line'
                 }`}>
                 <span className={`material-symbols-outlined text-[24px] ${t.txt}`}>{m.icon}</span>
-                <span className="w-full text-center text-xs uppercase tracking-wider truncate">{m.name}</span>
+                <span className="w-full text-center text-xs font-bold uppercase tracking-wider truncate text-ink">{m.name}</span>
                 {m.subtitle && (
-                  <span className="w-full text-center text-[10px] font-semibold text-white/70 tabular-nums truncate">{m.subtitle}</span>
+                  <span className="w-full text-center text-[10px] font-semibold text-ink-3 tnum truncate">{m.subtitle}</span>
                 )}
                 {selected && (
-                  <span className="absolute top-1.5 right-1.5 material-symbols-outlined text-[16px] text-white bg-black/40 rounded-full">check_circle</span>
+                  <span className={`absolute top-1.5 right-1.5 material-symbols-outlined text-[16px] ${t.txt}`}>check_circle</span>
                 )}
               </button>
             );
@@ -416,46 +416,46 @@ function PaymentStep(props: PaymentStepProps) {
 
       {/* Modo simple — efectivo: botones de billete recibido */}
       {isSinglePayment && primaryIsCash && (
-        <div className="bg-[#121212] border border-[#12533a]/40 rounded-xl p-3 space-y-3">
+        <div className="bg-surface-2 border border-success/40 rounded-xl p-3 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[#95d4b3] text-[11px] font-bold uppercase tracking-widest">¿Cuánto recibió el cliente?</span>
+            <span className="text-success text-[11px] font-bold uppercase tracking-widest">¿Cuánto recibió el cliente?</span>
             <button onClick={() => pickCashReceived(total)}
-              className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-[#12533a]/40 text-[#95d4b3] hover:bg-[#12533a]/70">
+              className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-success-soft text-success hover:opacity-80">
               Pago exacto
             </button>
           </div>
           <div className="grid grid-cols-3 gap-2">
             {QUICK_BILLS.filter(b => b >= total).slice(0, 6).map(b => (
               <button key={b} onClick={() => pickCashReceived(b)}
-                className={`h-14 rounded-xl border-2 font-black text-base transition-all active:scale-[0.97] ${
+                className={`h-14 rounded-xl border-2 font-extrabold text-base transition-all active:scale-[0.97] tnum ${
                   Math.abs(primaryAmount - b) < 0.01
-                    ? 'bg-[#12533a] border-[#95d4b3] text-white'
-                    : 'bg-[#121212] border-[#2a2a2a] text-[#c0c8cb] hover:border-[#95d4b3]'
+                    ? 'bg-success-soft border-success text-success'
+                    : 'bg-surface border-line text-ink-2 hover:border-success'
                 }`}>
                 {COP(b)}
               </button>
             ))}
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[#8a9295] text-xs shrink-0">Otro:</span>
+            <span className="text-ink-3 text-xs shrink-0">Otro:</span>
             <div className="relative flex-1">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8a9295] text-sm">$</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-3 text-sm">$</span>
               <input type="number" value={primary.amount}
                 onChange={e => updateDraft(0, { amount: e.target.value })}
                 placeholder="Monto recibido"
-                className="w-full pl-7 pr-3 py-2.5 rounded-lg bg-[#1E1E1E] border border-[#2a2a2a] text-[#95d4b3] text-base font-bold focus:border-[#95d4b3] outline-none" />
+                className="w-full pl-7 pr-3 py-2.5 rounded-lg bg-surface border border-line text-success text-base font-bold focus:border-success outline-none" />
             </div>
           </div>
 
           {/* Vuelto enorme */}
           {totals.change > 0 && (
-            <div className="rounded-xl bg-gradient-to-br from-[#12533a] to-[#0c4029] border border-[#95d4b3]/40 p-4 text-center">
-              <div className="text-[#95d4b3] text-[10px] font-bold uppercase tracking-widest">Vuelto a entregar</div>
-              <div className="text-white font-black text-4xl sm:text-5xl tabular-nums leading-tight mt-1">{COP(totals.change)}</div>
+            <div className="rounded-xl bg-success-soft border border-success/40 p-4 text-center">
+              <div className="text-success text-[10px] font-bold uppercase tracking-widest">Vuelto a entregar</div>
+              <div className="font-display font-semibold text-4xl sm:text-5xl tnum leading-tight mt-1">{COP(totals.change)}</div>
             </div>
           )}
           {totals.remaining > 0 && primaryAmount > 0 && (
-            <div className="text-[#ffb4ab] text-xs text-center font-semibold">
+            <div className="text-danger text-xs text-center font-semibold">
               Falta {COP(totals.remaining)} para completar
             </div>
           )}
@@ -464,11 +464,11 @@ function PaymentStep(props: PaymentStepProps) {
 
       {/* Modo simple — no efectivo y no fiado: opcional referencia */}
       {isSinglePayment && !primaryIsCash && !primaryIsFiado && (
-        <div className="bg-[#121212] border border-[#0f4c5c]/40 rounded-xl p-3">
+        <div className="bg-surface-2 border border-primary/40 rounded-xl p-3">
           <input type="text" value={primary.reference || ''}
             onChange={e => updateDraft(0, { reference: e.target.value })}
             placeholder="Ref. de transferencia (opcional)"
-            className="w-full bg-[#1E1E1E] border border-[#2a2a2a] rounded-lg px-3 py-2 text-[#c0c8cb] text-sm" />
+            className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-ink-2 text-sm focus:border-primary outline-none" />
         </div>
       )}
 
@@ -486,14 +486,14 @@ function PaymentStep(props: PaymentStepProps) {
       {combineMode && (
         <div className="space-y-3">
           <div className="grid grid-cols-3 gap-2">
-            <Stat label="Pagado" value={COP(totals.appliedToBill)} color={totals.remaining === 0 ? 'text-[#95d4b3]' : 'text-[#e1e2e4]'} />
-            <Stat label="Falta"  value={COP(totals.remaining)}     color={totals.remaining > 0 ? 'text-[#ffb4ab]' : 'text-[#8a9295]'} />
-            <Stat label="Vuelto" value={COP(totals.change)}        color={totals.change > 0 ? 'text-[#ffba27]' : 'text-[#8a9295]'} />
+            <Stat label="Pagado" value={COP(totals.appliedToBill)} color={totals.remaining === 0 ? 'text-success' : 'text-ink'} />
+            <Stat label="Falta"  value={COP(totals.remaining)}     color={totals.remaining > 0 ? 'text-danger' : 'text-ink-3'} />
+            <Stat label="Vuelto" value={COP(totals.change)}        color={totals.change > 0 ? 'text-warn' : 'text-ink-3'} />
           </div>
 
           {/* Tiles: cada uno actúa como toggle. Si se activa, se agrega como draft con el monto restante. */}
           <div>
-            <p className="text-[#8a9295] text-[10px] font-bold uppercase tracking-widest mb-1.5">Toca un método para añadirlo</p>
+            <p className="text-ink-3 text-[10px] font-bold uppercase tracking-widest mb-1.5">Toca un método para añadirlo</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {ordered.map(m => {
                 const t = methodTheme(m.type, m.name);
@@ -511,14 +511,14 @@ function PaymentStep(props: PaymentStepProps) {
                         setDrafts(ds => [...ds, { method: m.name, amount: remaining > 0 ? String(remaining) : '' }]);
                       }
                     }}
-                    className={`relative h-16 rounded-xl ${t.bg} ${t.hov} text-white font-bold flex flex-col items-center justify-center gap-0.5 transition-all active:scale-[0.97] ${active ? `ring-2 ${t.ring}` : 'opacity-70'}`}>
+                    className={`relative h-16 rounded-xl ${t.soft} border flex flex-col items-center justify-center gap-0.5 transition-all active:scale-[0.97] ${active ? `${t.border} ring-2 ${t.ring}` : 'border-line opacity-70'}`}>
                     <span className={`material-symbols-outlined text-[20px] ${t.txt}`}>{m.icon}</span>
-                    <span className="text-[10px] uppercase tracking-wider">{m.name}</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-ink">{m.name}</span>
                     {active && (
-                      <span className="absolute top-1 right-1 material-symbols-outlined text-[14px] text-white bg-black/40 rounded-full">check_circle</span>
+                      <span className={`absolute top-1 right-1 material-symbols-outlined text-[14px] ${t.txt}`}>check_circle</span>
                     )}
                     {active && amount > 0 && (
-                      <span className="absolute bottom-1 right-1.5 text-[9px] font-black text-white bg-black/40 px-1 rounded">{COP(amount)}</span>
+                      <span className="absolute bottom-1 right-1.5 text-[9px] font-extrabold text-ink bg-surface-3 px-1 rounded tnum">{COP(amount)}</span>
                     )}
                   </button>
                 );
@@ -534,38 +534,38 @@ function PaymentStep(props: PaymentStepProps) {
               const meta = availableMethods.find(m => m.name === d.method);
               const t = methodTheme(meta?.type || 'other', d.method);
               return (
-                <div key={i} className="bg-[#121212] border border-[#2a2a2a] rounded-xl p-2.5">
+                <div key={i} className="bg-surface-2 border border-line rounded-xl p-2.5">
                   <div className="flex items-center gap-2 mb-1.5">
                     <span className={`material-symbols-outlined text-[16px] ${t.txt}`}>{meta?.icon || 'payment'}</span>
                     <span className="flex-1 min-w-0">
-                      <span className="block text-[#c0c8cb] text-xs font-bold truncate">{d.method}</span>
+                      <span className="block text-ink-2 text-xs font-bold truncate">{d.method}</span>
                       {meta?.subtitle && (
-                        <span className="block text-[#8a9295] text-[10px] font-semibold tabular-nums truncate">{meta.subtitle}</span>
+                        <span className="block text-ink-3 text-[10px] font-semibold tnum truncate">{meta.subtitle}</span>
                       )}
                     </span>
                     {drafts.length > 1 && (
                       <button onClick={() => removeDraft(i)}
-                        className="text-[#8a9295] hover:text-[#ffb4ab] p-1 rounded hover:bg-[#93000a]/20">
+                        className="text-ink-3 hover:text-danger p-1 rounded hover:bg-danger-soft">
                         <span className="material-symbols-outlined text-[16px]">close</span>
                       </button>
                     )}
                   </div>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8a9295] text-sm">$</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-3 text-sm">$</span>
                     <input type="number" value={d.amount}
                       onChange={e => updateDraft(i, { amount: e.target.value })}
                       placeholder={isFiado ? 'Monto fiado' : 'Monto'}
-                      className={`w-full pl-7 pr-3 py-2.5 rounded-lg border text-base font-bold text-center ${
-                        isCash ? 'bg-[#1E1E1E] border-[#12533a] text-[#95d4b3]'
-                        : isFiado ? 'bg-[#1E1E1E] border-[#5d4000] text-[#ffba27]'
-                        : 'bg-[#1E1E1E] border-[#0f4c5c] text-[#9acee1]'
+                      className={`w-full pl-7 pr-3 py-2.5 rounded-lg border text-base font-bold text-center bg-surface tnum ${
+                        isCash ? 'border-success text-success'
+                        : isFiado ? 'border-warn text-warn'
+                        : 'border-primary text-primary'
                       }`} />
                   </div>
                   {!isCash && !isFiado && (
                     <input type="text" value={d.reference || ''}
                       onChange={e => updateDraft(i, { reference: e.target.value })}
                       placeholder="Ref. de transferencia (opcional)"
-                      className="mt-1.5 w-full bg-[#1E1E1E] border border-[#333] rounded-lg px-3 py-2 text-[#c0c8cb] text-xs" />
+                      className="mt-1.5 w-full bg-surface border border-line rounded-lg px-3 py-2 text-ink-2 text-xs focus:border-primary outline-none" />
                   )}
                 </div>
               );
@@ -601,31 +601,31 @@ function FiadoFields({
     weekday: 'long', day: 'numeric', month: 'long',
   }).format(dueDate);
   return (
-    <div className="bg-[#5d4000]/20 border border-[#ffba27]/30 rounded-xl p-3 space-y-2">
-      <p className="text-[#ffba27] text-[11px] font-bold uppercase tracking-widest">Datos del cliente (fiado)</p>
+    <div className="bg-warn-soft border border-warn/30 rounded-xl p-3 space-y-2">
+      <p className="text-warn text-[11px] font-bold uppercase tracking-widest">Datos del cliente (fiado)</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div>
-          <span className="block text-[10px] text-[#ffba27]/80 font-bold uppercase tracking-wider mb-1">Nombre <span className="text-[#ffb4ab]">*</span></span>
+          <span className="block text-[10px] text-warn/80 font-bold uppercase tracking-wider mb-1">Nombre <span className="text-danger">*</span></span>
           <input type="text" value={name} onChange={e => setName(e.target.value)}
             placeholder="Ej: Juan Pérez"
             autoFocus
-            className="w-full bg-[#121212] border border-[#5d4000] rounded-lg px-3 py-2 text-[#e1e2e4] text-sm focus:border-[#ffba27] outline-none" />
+            className="w-full bg-surface border border-warn/50 rounded-lg px-3 py-2 text-ink text-sm focus:border-warn outline-none" />
         </div>
         <div>
-          <span className="block text-[10px] text-[#ffba27]/80 font-bold uppercase tracking-wider mb-1">Teléfono</span>
+          <span className="block text-[10px] text-warn/80 font-bold uppercase tracking-wider mb-1">Teléfono</span>
           <input type="tel" inputMode="numeric" value={phone}
             onChange={e => setPhone(e.target.value.replace(/[^\d\s+()-]/g, ''))}
             placeholder="Ej: 300 123 4567"
-            className="w-full bg-[#121212] border border-[#5d4000] rounded-lg px-3 py-2 text-[#e1e2e4] text-sm focus:border-[#ffba27] outline-none" />
+            className="w-full bg-surface border border-warn/50 rounded-lg px-3 py-2 text-ink text-sm focus:border-warn outline-none" />
         </div>
       </div>
       <div>
-        <span className="block text-[10px] text-[#ffba27]/80 font-bold uppercase tracking-wider mb-1">¿Cuándo paga?</span>
+        <span className="block text-[10px] text-warn/80 font-bold uppercase tracking-wider mb-1">¿Cuándo paga?</span>
         <input type="text" value={when} onChange={e => setWhen(e.target.value)}
           placeholder="Ej: Viernes, fin de mes…"
-          className="w-full bg-[#121212] border border-[#5d4000] rounded-lg px-3 py-2 text-[#e1e2e4] text-sm focus:border-[#ffba27] outline-none" />
+          className="w-full bg-surface border border-warn/50 rounded-lg px-3 py-2 text-ink text-sm focus:border-warn outline-none" />
       </div>
-      <p className="text-[#ffba27]/90 text-[11px] leading-snug pt-0.5">
+      <p className="text-warn/90 text-[11px] leading-snug pt-0.5">
         Plazo del negocio: <strong>{termDays} días</strong> — vence el {dueLabel}.
       </p>
     </div>
@@ -643,14 +643,14 @@ function InvoiceAskStep({ total, usingFiado, onYes, onNo, loading }: { total: nu
   return (
     <div className="space-y-4 py-2">
       <div className="text-center">
-        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#0f4c5c]/40 mb-3">
-          <span className="material-symbols-outlined text-[#9acee1] text-3xl">receipt_long</span>
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary-soft mb-3">
+          <span className="material-symbols-outlined text-primary text-3xl">receipt_long</span>
         </div>
-        <h3 className="text-white font-black text-2xl">¿Desea factura?</h3>
-        <p className="text-[#8a9295] text-sm mt-1">
+        <h3 className="font-extrabold text-2xl">¿Desea factura?</h3>
+        <p className="text-ink-3 text-sm mt-1">
           {usingFiado
-            ? <>Venta registrada por <span className="text-[#ffba27] font-bold">{COP(total)}</span> · incluye fiado</>
-            : <>Cobro completado por <span className="text-[#95d4b3] font-bold">{COP(total)}</span></>}
+            ? <>Venta registrada por <span className="text-warn font-bold">{COP(total)}</span> · incluye fiado</>
+            : <>Cobro completado por <span className="text-success font-bold">{COP(total)}</span></>}
         </p>
       </div>
 
@@ -658,21 +658,21 @@ function InvoiceAskStep({ total, usingFiado, onYes, onNo, loading }: { total: nu
         <button ref={noBtnRef}
           onClick={onNo} disabled={loading}
           onKeyDown={e => { if (e.key === 'Enter') onNo(); }}
-          className="h-24 bg-[#1d2021] hover:bg-[#282a2b] border-2 border-[#333] hover:border-[#c0c8cb] disabled:opacity-40 text-white font-black text-xl rounded-xl transition-all active:scale-[0.98] flex flex-col items-center justify-center gap-1">
+          className="h-24 bg-surface-2 hover:bg-surface-3 border-2 border-line hover:border-line-strong disabled:opacity-40 font-extrabold text-xl rounded-xl transition-all active:scale-[0.98] flex flex-col items-center justify-center gap-1">
           <span className="material-symbols-outlined text-[28px]">close</span>
           NO
-          <span className="text-[10px] font-medium text-[#8a9295] tracking-wider uppercase">Consumidor final</span>
+          <span className="text-[10px] font-medium text-ink-3 tracking-wider uppercase">Consumidor final</span>
         </button>
         <button onClick={onYes} disabled={loading}
-          className="h-24 bg-[#0f4c5c] hover:bg-[#155a6d] border-2 border-[#9acee1] disabled:opacity-40 text-white font-black text-xl rounded-xl transition-all active:scale-[0.98] flex flex-col items-center justify-center gap-1">
-          <span className="material-symbols-outlined text-[28px] text-[#9acee1]">receipt_long</span>
+          className="h-24 bg-primary-soft hover:bg-primary/20 border-2 border-primary disabled:opacity-40 font-extrabold text-xl rounded-xl transition-all active:scale-[0.98] flex flex-col items-center justify-center gap-1">
+          <span className="material-symbols-outlined text-[28px] text-primary">receipt_long</span>
           SÍ
-          <span className="text-[10px] font-medium text-[#9acee1] tracking-wider uppercase">Pedir datos</span>
+          <span className="text-[10px] font-medium text-primary tracking-wider uppercase">Pedir datos</span>
         </button>
       </div>
 
-      <p className="text-[#40484b] text-[11px] text-center">
-        Pulsa <kbd className="px-1.5 py-0.5 bg-[#282a2b] rounded text-[#c0c8cb] font-mono">Enter</kbd> para registrar como consumidor final y seguir vendiendo.
+      <p className="text-ink-4 text-[11px] text-center">
+        Pulsa <kbd className="px-1.5 py-0.5 bg-surface-3 rounded text-ink-2 font-mono">Enter</kbd> para registrar como consumidor final y seguir vendiendo.
       </p>
     </div>
   );
@@ -700,60 +700,60 @@ function InvoiceDataStep(props: {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <button onClick={onBack} className="text-[#8a9295] hover:text-white p-1 rounded-lg hover:bg-[#282a2b]">
+        <button onClick={onBack} className="text-ink-3 hover:text-ink p-1 rounded-lg hover:bg-surface-2">
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
         <div>
-          <h3 className="text-white font-bold text-lg">Datos para la factura</h3>
-          <p className="text-[#8a9295] text-xs">Se enviará al WhatsApp del cliente.</p>
+          <h3 className="font-bold text-lg">Datos para la factura</h3>
+          <p className="text-ink-3 text-xs">Se enviará al WhatsApp del cliente.</p>
         </div>
       </div>
 
       <Field label="WhatsApp" required hint="Para enviar la factura electrónica">
         <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-[#95d4b3] text-[20px]">chat</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-success text-[20px]">chat</span>
           <input ref={waRef} type="tel" inputMode="numeric" value={wa}
             onChange={e => setWa(e.target.value.replace(/[^\d\s+()-]/g, ''))}
             placeholder="Ej: 300 123 4567"
-            className="w-full pl-11 pr-3 py-3 bg-[#121212] border border-[#12533a] rounded-xl text-white text-base font-semibold focus:border-[#95d4b3] outline-none" />
+            className="w-full pl-11 pr-3 py-3 bg-surface-2 border border-success/60 rounded-xl text-ink text-base font-semibold focus:border-success outline-none" />
         </div>
       </Field>
 
       <Field label="Nombre del cliente" required>
         <input type="text" value={name} onChange={e => setName(e.target.value)}
           placeholder="Ej: Juan Pérez"
-          className="w-full px-3 py-2.5 bg-[#121212] border border-[#333] rounded-xl text-[#e1e2e4] text-sm focus:border-[#9acee1] outline-none" />
+          className="w-full px-3 py-2.5 bg-surface-2 border border-line rounded-xl text-ink text-sm focus:border-primary outline-none" />
       </Field>
 
       <div className="grid grid-cols-2 gap-2">
         <Field label="NIT / Cédula" hint="Opcional">
           <input type="text" value={doc} onChange={e => setDoc(e.target.value)}
             placeholder="123.456.789"
-            className="w-full px-3 py-2.5 bg-[#121212] border border-[#333] rounded-xl text-[#e1e2e4] text-sm focus:border-[#9acee1] outline-none" />
+            className="w-full px-3 py-2.5 bg-surface-2 border border-line rounded-xl text-ink text-sm focus:border-primary outline-none" />
         </Field>
         <Field label="Correo" hint="Opcional">
           <input type="email" value={email} onChange={e => setEmail(e.target.value)}
             placeholder="cliente@correo.com"
-            className="w-full px-3 py-2.5 bg-[#121212] border border-[#333] rounded-xl text-[#e1e2e4] text-sm focus:border-[#9acee1] outline-none" />
+            className="w-full px-3 py-2.5 bg-surface-2 border border-line rounded-xl text-ink text-sm focus:border-primary outline-none" />
         </Field>
       </div>
 
       <Field label="Dirección" hint="Opcional — útil para domicilios y facturación física">
         <input type="text" value={address} onChange={e => setAddress(e.target.value)}
           placeholder="Ej: Cra 123 #45-67, Bogotá"
-          className="w-full px-3 py-2.5 bg-[#121212] border border-[#333] rounded-xl text-[#e1e2e4] text-sm focus:border-[#9acee1] outline-none" />
+          className="w-full px-3 py-2.5 bg-surface-2 border border-line rounded-xl text-ink text-sm focus:border-primary outline-none" />
       </Field>
 
-      {err && <div className="text-[#ffb4ab] text-xs bg-[#93000a]/30 border border-[#93000a]/50 px-3 py-2 rounded-lg">{err}</div>}
+      {err && <div className="text-danger text-xs bg-danger-soft border border-danger/50 px-3 py-2 rounded-lg">{err}</div>}
 
       <div className="grid grid-cols-2 gap-2 pt-1">
         <button onClick={onConfirm} disabled={loading}
-          className="h-12 bg-[#12533a] hover:bg-[#1a6b45] disabled:opacity-40 text-[#95d4b3] font-black rounded-xl transition-colors active:scale-[0.98] flex items-center justify-center gap-2">
+          className="h-12 bg-primary hover:bg-primary-ink disabled:opacity-45 text-white font-bold rounded-xl transition-colors active:scale-[0.98] flex items-center justify-center gap-2">
           <span className="material-symbols-outlined">check_circle</span>
           {loading ? 'Procesando…' : 'Emitir factura'}
         </button>
         <button onClick={onBack}
-          className="h-12 bg-[#1d2021] hover:bg-[#282a2b] border border-[#333] text-[#c0c8cb] font-semibold rounded-xl transition-colors">
+          className="h-12 bg-surface-2 hover:bg-surface-3 border border-line text-ink-2 font-semibold rounded-xl transition-colors">
           Atrás
         </button>
       </div>
@@ -765,11 +765,11 @@ function InvoiceDataStep(props: {
 // Subcomponentes
 // ─────────────────────────────────────────────────────────────────────────────
 
-function Stat({ label, value, color = 'text-[#e1e2e4]' }: { label: string; value: string; color?: string }) {
+function Stat({ label, value, color = 'text-ink' }: { label: string; value: string; color?: string }) {
   return (
-    <div className="bg-[#121212] border border-[#2a2a2a] rounded-xl p-2.5">
-      <p className="text-[#8a9295] text-[10px] font-bold uppercase tracking-wider">{label}</p>
-      <p className={`font-black text-base tabular-nums ${color}`}>{value}</p>
+    <div className="bg-surface-2 border border-line rounded-xl p-2.5">
+      <p className="text-ink-3 text-[10px] font-bold uppercase tracking-wider">{label}</p>
+      <p className={`font-extrabold text-base tnum ${color}`}>{value}</p>
     </div>
   );
 }
@@ -777,9 +777,9 @@ function Stat({ label, value, color = 'text-[#e1e2e4]' }: { label: string; value
 function Field({ label, required, hint, children }: { label: string; required?: boolean; hint?: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="block text-[11px] text-[#8a9295] font-bold uppercase tracking-widest mb-1">
-        {label} {required && <span className="text-[#ffb4ab]">*</span>}
-        {hint && <span className="text-[#40484b] normal-case font-medium tracking-normal ml-1.5">· {hint}</span>}
+      <span className="block text-[11px] text-ink-3 font-bold uppercase tracking-widest mb-1">
+        {label} {required && <span className="text-danger">*</span>}
+        {hint && <span className="text-ink-4 normal-case font-medium tracking-normal ml-1.5">· {hint}</span>}
       </span>
       {children}
     </label>
