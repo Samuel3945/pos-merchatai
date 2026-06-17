@@ -77,21 +77,21 @@ export default function Login({ onLoggedIn }: Props) {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="w-full max-w-md bg-[#121212] border border-[#222] rounded-3xl p-8 shadow-2xl">
+      <div className="w-full max-w-md bg-surface border border-line rounded-3xl p-8 shadow-token3">
         <div className="flex items-center gap-3 mb-1">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-               style={{ background: 'linear-gradient(135deg, #9acee1, #95d4b3)' }}>
-            <span className="text-[#0a0c0d] font-black text-base">A</span>
+               style={{ background: 'linear-gradient(135deg, rgb(var(--tc-primary)), rgb(var(--tc-primary-ink)))' }}>
+            <span className="text-white font-black text-base">A</span>
           </div>
           <div>
-            <div className="text-white font-bold text-lg leading-tight">Acceso POS</div>
-            <div className="text-[#8a9295] text-xs">Ingresa el código que te dio el administrador</div>
+            <div className="text-ink font-bold text-lg leading-tight">Acceso POS</div>
+            <div className="text-ink-3 text-xs">Ingresa el código que te dio el administrador</div>
           </div>
         </div>
 
         <div className="mt-6 space-y-4">
           <div>
-            <label className="block text-[#8a9295] text-[11px] uppercase tracking-wider font-bold mb-1.5">
+            <label className="block text-ink-3 text-[11px] uppercase tracking-wider font-bold mb-1.5">
               Código de acceso
             </label>
             <input
@@ -102,20 +102,20 @@ export default function Login({ onLoggedIn }: Props) {
               autoComplete="off"
               spellCheck={false}
               placeholder="Pega aquí el código del administrador"
-              className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl px-4 py-3.5 text-sm text-white font-mono placeholder:text-[#40484b] placeholder:font-sans focus:border-[#9acee1] transition-colors outline-none"
+              className="w-full bg-surface-2 border border-line rounded-xl px-4 py-3.5 text-sm text-ink font-mono placeholder:text-ink-4 placeholder:font-sans focus:border-primary transition-colors outline-none"
             />
-            <div className="text-[#40484b] text-[10px] mt-1.5">El administrador genera este código en la vista Cajeros → Generar token</div>
+            <div className="text-ink-4 text-[10px] mt-1.5">El administrador genera este código en la vista Cajeros → Generar token</div>
             <button
               type="button"
               onClick={() => setScanning(true)}
-              className="mt-2 w-full flex items-center justify-center gap-2 bg-[#1a1a1a] border border-[#333] hover:border-[#9acee1] text-[#9acee1] font-semibold py-2.5 rounded-xl text-sm transition-colors active:scale-[0.98]">
+              className="mt-2 w-full flex items-center justify-center gap-2 bg-surface-2 border border-line hover:border-primary text-primary font-semibold py-2.5 rounded-xl text-sm transition-colors active:scale-[0.98]">
               <span className="material-symbols-outlined text-[18px]">qr_code_scanner</span>
               Escanear QR de acceso
             </button>
           </div>
 
           {error && (
-            <div className="bg-[#3a1010] border border-[#5a1818] text-[#ffb4ab] px-3 py-2 rounded-lg text-sm flex items-start gap-2">
+            <div className="bg-danger-soft border border-danger text-danger px-3 py-2 rounded-lg text-sm flex items-start gap-2">
               <span className="material-symbols-outlined text-[18px] mt-0.5">error</span>
               <span>{error}</span>
             </div>
@@ -124,12 +124,12 @@ export default function Login({ onLoggedIn }: Props) {
           <button
             onClick={() => submit()}
             disabled={busy || !code.trim()}
-            className="w-full bg-gradient-to-r from-[#9acee1] to-[#95d4b3] text-[#0a0c0d] font-bold py-3.5 rounded-xl text-base disabled:opacity-50 transition-opacity active:scale-[0.98]">
+            className="w-full bg-gradient-to-r from-primary to-success text-white font-bold py-3.5 rounded-xl text-base disabled:opacity-50 transition-opacity active:scale-[0.98]">
             {busy ? 'Conectando…' : 'Ingresar'}
           </button>
         </div>
 
-        <div className="mt-6 text-center text-[#40484b] text-[11px]">
+        <div className="mt-6 text-center text-ink-4 text-[11px]">
           Si no tienes un código, pídele al administrador que cree uno en la sección Cajeros.
         </div>
       </div>

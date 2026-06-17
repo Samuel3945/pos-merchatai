@@ -75,7 +75,7 @@ export default function QrScanner({ onScan, onClose }: Props) {
         <div className="text-white font-bold">Escanear código QR</div>
         <button
           onClick={onClose}
-          className="text-[#8a9295] hover:text-white text-sm px-3 py-1.5 rounded-lg border border-[#333]"
+          className="text-ink-3 hover:text-white text-sm px-3 py-1.5 rounded-lg border border-line"
         >
           Cancelar
         </button>
@@ -91,15 +91,15 @@ export default function QrScanner({ onScan, onClose }: Props) {
         <canvas ref={canvasRef} className="hidden" />
         {/* Aiming frame */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-64 h-64 rounded-2xl border-2 border-[#9acee1] shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]" />
+          <div className="w-64 h-64 rounded-2xl border-2 border-primary shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]" />
         </div>
         {error && (
-          <div className="absolute inset-x-4 bottom-6 bg-[#3a1010] border border-[#5a1818] text-[#ffb4ab] px-3 py-2 rounded-lg text-sm">
+          <div className="absolute inset-x-4 bottom-6 bg-danger-soft border border-danger text-danger px-3 py-2 rounded-lg text-sm">
             {error}
           </div>
         )}
         {!error && (
-          <div className="absolute inset-x-0 bottom-6 text-center text-[#8a9295] text-xs">
+          <div className="absolute inset-x-0 bottom-6 text-center text-ink-3 text-xs">
             Apunta al QR de acceso que genera el administrador
           </div>
         )}

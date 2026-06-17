@@ -125,11 +125,11 @@ function MiniCalendar({
     const isToday  = sameDay(d, today);
     const isFuture = d > today;
 
-    if (isStart || isEnd) return 'bg-[#9acee1] text-[#003542] font-bold rounded-lg';
-    if (inRange) return 'bg-[#9acee1]/20 text-[#e1e2e4] rounded-none';
-    if (isFuture) return 'text-[#40484b] cursor-not-allowed';
-    if (isToday) return 'text-[#9acee1] font-bold hover:bg-[#282a2b] rounded-lg';
-    return 'text-[#e1e2e4] hover:bg-[#282a2b] rounded-lg';
+    if (isStart || isEnd) return 'bg-primary text-[#003542] font-bold rounded-lg';
+    if (inRange) return 'bg-primary/20 text-ink rounded-none';
+    if (isFuture) return 'text-ink-4 cursor-not-allowed';
+    if (isToday) return 'text-primary font-bold hover:bg-surface-3 rounded-lg';
+    return 'text-ink hover:bg-surface-3 rounded-lg';
   }
 
   const monthDate = new Date(viewYear, viewMonth, 1);
@@ -138,18 +138,18 @@ function MiniCalendar({
     <div className="select-none">
       <div className="flex items-center justify-between mb-3">
         <button onClick={onPrevMonth}
-          className="p-1 text-[#8a9295] hover:text-[#e1e2e4] hover:bg-[#282a2b] rounded-lg transition-colors">
+          className="p-1 text-ink-3 hover:text-ink hover:bg-surface-3 rounded-lg transition-colors">
           <span className="material-symbols-outlined text-[18px]">chevron_left</span>
         </button>
-        <span className="text-[#e1e2e4] font-semibold text-sm capitalize">{fmtMonthYear(monthDate)}</span>
+        <span className="text-ink font-semibold text-sm capitalize">{fmtMonthYear(monthDate)}</span>
         <button onClick={onNextMonth}
-          className="p-1 text-[#8a9295] hover:text-[#e1e2e4] hover:bg-[#282a2b] rounded-lg transition-colors">
+          className="p-1 text-ink-3 hover:text-ink hover:bg-surface-3 rounded-lg transition-colors">
           <span className="material-symbols-outlined text-[18px]">chevron_right</span>
         </button>
       </div>
       <div className="grid grid-cols-7 mb-1">
         {['Lu','Ma','Mi','Ju','Vi','Sa','Do'].map(h => (
-          <div key={h} className="text-center text-[#8a9295] text-xs py-1 font-semibold">{h}</div>
+          <div key={h} className="text-center text-ink-3 text-xs py-1 font-semibold">{h}</div>
         ))}
       </div>
       <div className="grid grid-cols-7">
@@ -251,23 +251,23 @@ export default function DateRangePicker({ range, onRangeChange }: Props) {
   return (
     <div ref={pickerRef} className="relative">
         <button onClick={openPicker}
-          className="flex items-center gap-2 bg-[#1E1E1E] border border-[#333333] hover:border-[#9acee1] text-[#e1e2e4] font-semibold text-sm px-4 py-2.5 rounded-xl transition-colors active:scale-[0.98]">
-          <span className="material-symbols-outlined text-[#9acee1] text-[18px]">date_range</span>
+          className="flex items-center gap-2 bg-surface border border-line hover:border-primary text-ink font-semibold text-sm px-4 py-2.5 rounded-xl transition-colors active:scale-[0.98]">
+          <span className="material-symbols-outlined text-primary text-[18px]">date_range</span>
           {displayLabel}
-          <span className="material-symbols-outlined text-[#8a9295] text-[16px]">expand_more</span>
+          <span className="material-symbols-outlined text-ink-3 text-[16px]">expand_more</span>
         </button>
 
         {open && (
-          <div className="absolute top-full right-0 mt-2 z-50 bg-[#1E1E1E] border border-[#333333] rounded-2xl shadow-[0px_8px_32px_rgba(0,0,0,0.6)] flex flex-col sm:flex-row overflow-hidden max-w-[calc(100vw-2rem)]"
+          <div className="absolute top-full right-0 mt-2 z-50 bg-surface border border-line rounded-2xl shadow-[0px_8px_32px_rgba(0,0,0,0.6)] flex flex-col sm:flex-row overflow-hidden max-w-[calc(100vw-2rem)]"
             style={{ width: 'min(560px, calc(100vw - 2rem))' }}>
-            <div className="w-full sm:w-44 border-b sm:border-b-0 sm:border-r border-[#333333] p-3 space-y-1 max-h-40 sm:max-h-none overflow-y-auto">
-              <p className="text-[#8a9295] text-xs font-bold uppercase tracking-wider px-2 py-1">Período</p>
+            <div className="w-full sm:w-44 border-b sm:border-b-0 sm:border-r border-line p-3 space-y-1 max-h-40 sm:max-h-none overflow-y-auto">
+              <p className="text-ink-3 text-xs font-bold uppercase tracking-wider px-2 py-1">Período</p>
               {PRESETS.map(p => (
                 <button key={p.id} onClick={() => handlePresetClick(p.id)}
                   className={`w-full text-left px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
                     activePreset === p.id
-                      ? 'bg-[#0f4c5c] text-[#9acee1]'
-                      : 'text-[#c0c8cb] hover:bg-[#282a2b]'
+                      ? 'bg-primary-soft text-primary'
+                      : 'text-ink-2 hover:bg-surface-3'
                   }`}>
                   {p.label}
                 </button>
@@ -291,32 +291,32 @@ export default function DateRangePicker({ range, onRangeChange }: Props) {
                 />
               </div>
 
-              <div className="border-t border-[#333333] px-4 py-3 flex items-center gap-2 text-sm">
+              <div className="border-t border-line px-4 py-3 flex items-center gap-2 text-sm">
                 <div className="flex items-center gap-2 flex-1">
-                  <span className="text-[#8a9295] text-xs">De:</span>
+                  <span className="text-ink-3 text-xs">De:</span>
                   <input type="date"
                     value={tempStart ? toYMD(tempStart) : ''}
                     max={toYMD(today)}
                     onChange={e => { const d = new Date(e.target.value + 'T00:00:00'); if (!isNaN(d.getTime())) { setTempStart(d); setActivePreset('custom'); }}}
-                    className="bg-[#121212] border border-[#333333] rounded-lg px-2 py-1.5 text-[#e1e2e4] text-xs focus:border-[#9acee1] transition-colors flex-1" />
-                  <span className="text-[#8a9295] text-xs">Hasta:</span>
+                    className="bg-bg border border-line rounded-lg px-2 py-1.5 text-ink text-xs focus:border-primary transition-colors flex-1" />
+                  <span className="text-ink-3 text-xs">Hasta:</span>
                   <input type="date"
                     value={tempEnd ? toYMD(tempEnd) : ''}
                     min={tempStart ? toYMD(tempStart) : ''}
                     max={toYMD(today)}
                     onChange={e => { const d = new Date(e.target.value + 'T00:00:00'); if (!isNaN(d.getTime())) { setTempEnd(d); setActivePreset('custom'); }}}
-                    className="bg-[#121212] border border-[#333333] rounded-lg px-2 py-1.5 text-[#e1e2e4] text-xs focus:border-[#9acee1] transition-colors flex-1" />
+                    className="bg-bg border border-line rounded-lg px-2 py-1.5 text-ink text-xs focus:border-primary transition-colors flex-1" />
                 </div>
               </div>
 
-              <div className="border-t border-[#333333] px-4 py-3 flex justify-end gap-2">
+              <div className="border-t border-line px-4 py-3 flex justify-end gap-2">
                 <button onClick={() => setOpen(false)}
-                  className="px-4 py-2 bg-[#1d2021] border border-[#333333] text-[#c0c8cb] font-semibold text-sm rounded-xl hover:bg-[#282a2b] transition-colors">
+                  className="px-4 py-2 bg-surface-2 border border-line text-ink-2 font-semibold text-sm rounded-xl hover:bg-surface-3 transition-colors">
                   Cancelar
                 </button>
                 <button onClick={handleApply}
                   disabled={!tempStart || !tempEnd}
-                  className="px-4 py-2 bg-[#0f4c5c] hover:bg-[#155a6d] disabled:opacity-40 text-[#87bbce] font-bold text-sm rounded-xl transition-colors">
+                  className="px-4 py-2 bg-primary-soft hover:bg-primary-soft disabled:opacity-40 text-primary font-bold text-sm rounded-xl transition-colors">
                   Aplicar
                 </button>
               </div>

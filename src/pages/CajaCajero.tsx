@@ -158,7 +158,7 @@ export default function CajaCajero() {
 
   if (loading) {
     return (
-      <div className="h-full flex items-center justify-center text-[#8a9295]">
+      <div className="h-full flex items-center justify-center text-ink-3">
         <span className="material-symbols-outlined text-3xl animate-spin">progress_activity</span>
       </div>
     );
@@ -195,54 +195,54 @@ export default function CajaCajero() {
   const openNeedsExplanation = expectedOpening > 0 && (openCountedNum ?? 0) !== expectedOpening;
 
   return (
-    <div className="h-full overflow-y-auto bg-[#111415]">
+    <div className="h-full overflow-y-auto bg-bg">
       <div className="max-w-lg mx-auto px-4 py-5 pb-6 space-y-4">
 
-        {success && <div className="px-4 py-2.5 bg-[#12533a] border border-[#95d4b3]/40 text-[#95d4b3] rounded-xl text-sm font-semibold">✓ {success}</div>}
-        {error   && <div className="px-4 py-2.5 bg-[#93000a]/30 border border-[#93000a] text-[#ffb4ab] rounded-xl text-sm">{error}</div>}
+        {success && <div className="px-4 py-2.5 bg-success-soft border border-success/40 text-success rounded-xl text-sm font-semibold">✓ {success}</div>}
+        {error   && <div className="px-4 py-2.5 bg-danger-soft/30 border border-danger text-danger rounded-xl text-sm">{error}</div>}
 
         {/* Status card */}
-        <div className={`rounded-2xl p-5 border ${isOpen ? 'bg-[#12533a]/20 border-[#95d4b3]/30' : 'bg-[#1E1E1E] border-[#2a2a2a]'}`}>
+        <div className={`rounded-2xl p-5 border ${isOpen ? 'bg-success-soft/20 border-success/30' : 'bg-surface border-line'}`}>
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-[#8a9295] text-[11px] uppercase tracking-wider font-bold mb-1">Estado</div>
-              <div className={`font-black text-2xl ${isOpen ? 'text-[#95d4b3]' : 'text-[#8a9295]'}`}>
+              <div className="text-ink-3 text-[11px] uppercase tracking-wider font-bold mb-1">Estado</div>
+              <div className={`font-black text-2xl ${isOpen ? 'text-success' : 'text-ink-3'}`}>
                 {isOpen ? 'Abierta' : 'Cerrada'}
               </div>
               {isOpen && session && (
-                <div className="text-[#8a9295] text-xs mt-1">
+                <div className="text-ink-3 text-xs mt-1">
                   Desde {new Date(session.opened_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
                 </div>
               )}
             </div>
-            <span className={`material-symbols-outlined text-5xl ${isOpen ? 'text-[#95d4b3]' : 'text-[#40484b]'}`}>
+            <span className={`material-symbols-outlined text-5xl ${isOpen ? 'text-success' : 'text-ink-4'}`}>
               account_balance_wallet
             </span>
           </div>
 
           {isOpen && (
             <div className="mt-4 grid grid-cols-3 gap-2">
-              <div className="bg-[#121212] rounded-xl p-3">
-                <div className="text-[#8a9295] text-[10px] uppercase tracking-wider mb-0.5">Apertura</div>
-                <div className="text-[#e1e2e4] font-bold tabular-nums">{COP(session?.opening_amount || 0)}</div>
+              <div className="bg-bg border border-line rounded-xl p-3">
+                <div className="text-ink-3 text-[10px] uppercase tracking-wider mb-0.5">Apertura</div>
+                <div className="text-ink font-bold tabular-nums">{COP(session?.opening_amount || 0)}</div>
               </div>
-              <div className="bg-[#121212] rounded-xl p-3">
-                <div className="text-[#8a9295] text-[10px] uppercase tracking-wider mb-0.5">Ventas efectivo</div>
-                <div className="text-[#95d4b3] font-bold tabular-nums">{COP(cashSales)}</div>
+              <div className="bg-bg border border-line rounded-xl p-3">
+                <div className="text-ink-3 text-[10px] uppercase tracking-wider mb-0.5">Ventas efectivo</div>
+                <div className="text-success font-bold tabular-nums">{COP(cashSales)}</div>
               </div>
-              <div className="bg-[#121212] rounded-xl p-3">
-                <div className="text-[#8a9295] text-[10px] uppercase tracking-wider mb-0.5">Movimientos</div>
-                <div className={`font-bold tabular-nums ${totalMov >= 0 ? 'text-[#95d4b3]' : 'text-[#ffb4ab]'}`}>{COP(totalMov)}</div>
+              <div className="bg-bg border border-line rounded-xl p-3">
+                <div className="text-ink-3 text-[10px] uppercase tracking-wider mb-0.5">Movimientos</div>
+                <div className={`font-bold tabular-nums ${totalMov >= 0 ? 'text-success' : 'text-danger'}`}>{COP(totalMov)}</div>
               </div>
             </div>
           )}
           {isOpen && (
-            <div className="mt-3 bg-[#12533a]/30 border border-[#95d4b3]/40 rounded-xl p-3.5 flex items-center justify-between">
+            <div className="mt-3 bg-success-soft/30 border border-success/40 rounded-xl p-3.5 flex items-center justify-between">
               <div>
-                <div className="text-[#95d4b3] text-[10px] uppercase tracking-wider font-bold mb-0.5">Efectivo esperado en caja</div>
-                <div className="text-[#8a9295] text-[11px]">Esto es lo que debe haber para entregar</div>
+                <div className="text-success text-[10px] uppercase tracking-wider font-bold mb-0.5">Efectivo esperado en caja</div>
+                <div className="text-ink-3 text-[11px]">Esto es lo que debe haber para entregar</div>
               </div>
-              <div className="text-[#95d4b3] font-black text-2xl tabular-nums">{COP(expected)}</div>
+              <div className="text-success font-black text-2xl tabular-nums">{COP(expected)}</div>
             </div>
           )}
         </div>
@@ -250,19 +250,19 @@ export default function CajaCajero() {
         {/* Actions */}
         {!isOpen ? (
           <button onClick={() => setShowOpen(true)}
-            className="w-full h-14 bg-[#12533a] hover:bg-[#1a6b45] text-[#95d4b3] font-bold rounded-2xl flex items-center justify-center gap-2 text-base transition-colors active:scale-[0.98]">
+            className="w-full h-14 bg-primary hover:bg-primary-ink text-white font-bold rounded-2xl flex items-center justify-center gap-2 text-base transition-colors active:scale-[0.98]">
             <span className="material-symbols-outlined">lock_open</span>
             Abrir caja
           </button>
         ) : (
           <div className="grid grid-cols-2 gap-3">
             <button onClick={() => { setShowMove(true); handleDirection('out'); }}
-              className="h-12 bg-[#0f4c5c] hover:bg-[#155a6d] text-[#9acee1] font-bold rounded-xl flex items-center justify-center gap-1.5 text-sm transition-colors active:scale-[0.98]">
+              className="h-12 bg-primary hover:bg-primary-ink text-white font-bold rounded-xl flex items-center justify-center gap-1.5 text-sm transition-colors active:scale-[0.98]">
               <span className="material-symbols-outlined text-[18px]">swap_horiz</span>
               Movimiento
             </button>
             <button onClick={() => setShowClose(true)}
-              className="h-12 bg-[#3a1010] hover:bg-[#5a1818] text-[#ffb4ab] font-bold rounded-xl flex items-center justify-center gap-1.5 text-sm transition-colors active:scale-[0.98]">
+              className="h-12 bg-surface border border-line-strong text-ink font-bold rounded-xl flex items-center justify-center gap-1.5 text-sm transition-colors hover:border-danger hover:text-danger active:scale-[0.98]">
               <span className="material-symbols-outlined text-[18px]">lock</span>
               Cerrar caja
             </button>
@@ -272,17 +272,17 @@ export default function CajaCajero() {
         {/* Movements list */}
         {movements.length > 0 && (
           <div>
-            <div className="text-[#8a9295] text-[10px] uppercase tracking-wider font-bold mb-2">Movimientos del turno</div>
+            <div className="text-ink-3 text-[10px] uppercase tracking-wider font-bold mb-2">Movimientos del turno</div>
             <div className="space-y-1.5">
               {movements.slice(0, 30).map(m => (
-                <div key={m.id} className="bg-[#1E1E1E] border border-[#2a2a2a] rounded-xl px-3 py-2.5 flex items-center justify-between">
+                <div key={m.id} className="bg-surface border border-line rounded-xl px-3 py-2.5 flex items-center justify-between">
                   <div className="min-w-0">
-                    <div className="text-[#e1e2e4] text-sm font-semibold">{MOVEMENT_LABELS[m.type] || m.type}</div>
-                    <div className="text-[#8a9295] text-xs truncate max-w-[200px]">{m.reason}</div>
+                    <div className="text-ink text-sm font-semibold">{MOVEMENT_LABELS[m.type] || m.type}</div>
+                    <div className="text-ink-3 text-xs truncate max-w-[200px]">{m.reason}</div>
                   </div>
                   <div className={`font-bold tabular-nums text-sm shrink-0 ${
                     m.type === 'sale' || m.type === 'deposit' || m.type === 'adjustment'
-                      ? 'text-[#95d4b3]' : 'text-[#ffb4ab]'
+                      ? 'text-success' : 'text-danger'
                   }`}>
                     {m.type === 'sale' || m.type === 'deposit' || m.type === 'adjustment' ? '+' : '-'}{COP(m.amount)}
                   </div>
@@ -296,36 +296,36 @@ export default function CajaCajero() {
       {/* ── Modal: abrir caja ── */}
       {showOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-          <div className="bg-[#1E1E1E] border border-[#333] rounded-t-2xl sm:rounded-2xl w-full max-w-sm p-6 space-y-4">
+          <div className="bg-surface border border-line rounded-t-2xl sm:rounded-2xl w-full max-w-sm p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="font-bold text-[#e1e2e4] text-lg">Abrir caja</h2>
-              <button onClick={() => { setShowOpen(false); setError(''); }} className="text-[#8a9295] hover:text-[#e1e2e4]">
+              <h2 className="font-bold text-ink text-lg">Abrir caja</h2>
+              <button onClick={() => { setShowOpen(false); setError(''); }} className="text-ink-3 hover:text-ink">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
             {expectedOpening > 0 && (
-              <div className="bg-[#12533a]/20 border border-[#95d4b3]/30 rounded-xl p-3.5 flex items-center justify-between">
+              <div className="bg-success-soft/20 border border-success/30 rounded-xl p-3.5 flex items-center justify-between">
                 <div>
-                  <div className="text-[#95d4b3] text-[10px] uppercase tracking-wider font-bold mb-0.5">Deberías abrir con</div>
-                  <div className="text-[#8a9295] text-[11px]">Es lo que cerraste la última vez</div>
+                  <div className="text-success text-[10px] uppercase tracking-wider font-bold mb-0.5">Deberías abrir con</div>
+                  <div className="text-ink-3 text-[11px]">Es lo que cerraste la última vez</div>
                 </div>
-                <div className="text-[#95d4b3] font-black text-xl tabular-nums">{COP(expectedOpening)}</div>
+                <div className="text-success font-black text-xl tabular-nums">{COP(expectedOpening)}</div>
               </div>
             )}
             <div>
-              <label className="block text-xs text-[#8a9295] font-semibold uppercase tracking-wider mb-1.5">
+              <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">
                 {expectedOpening > 0 ? 'Efectivo contado' : 'Efectivo inicial'}
               </label>
               <input type="number" value={openAmount} onChange={e => setOpenAmount(e.target.value)} placeholder="0" autoFocus
-                className="w-full bg-[#121212] border border-[#333] rounded-xl px-4 py-2.5 text-[#e1e2e4] text-sm focus:border-[#9acee1] outline-none transition-colors" />
+                className="w-full bg-bg border border-line rounded-xl px-4 py-2.5 text-ink text-sm focus:border-primary outline-none transition-colors" />
             </div>
             {openDiff != null && (
               <div className={`flex items-center justify-between rounded-xl px-4 py-2.5 text-sm font-bold ${
                 openDiff === 0
-                  ? 'bg-[#12533a]/30 border border-[#95d4b3]/40 text-[#95d4b3]'
+                  ? 'bg-success-soft/30 border border-success/40 text-success'
                   : openDiff > 0
-                    ? 'bg-[#0f4c5c]/30 border border-[#9acee1]/40 text-[#9acee1]'
-                    : 'bg-[#3a1010] border border-[#5a1818] text-[#ffb4ab]'
+                    ? 'bg-primary-soft/30 border border-primary/40 text-primary'
+                    : 'bg-danger-soft border border-danger text-danger'
               }`}>
                 <span>{openDiff === 0 ? 'Coincide con el cierre' : openDiff > 0 ? 'Sobrante' : 'Faltante'}</span>
                 <span className="tabular-nums">{COP(Math.abs(openDiff))}</span>
@@ -333,24 +333,24 @@ export default function CajaCajero() {
             )}
             {openNeedsExplanation && (
               <div>
-                <label className="block text-xs text-[#ffb4ab] font-semibold uppercase tracking-wider mb-1.5">¿Qué pasó con la diferencia?</label>
+                <label className="block text-xs text-danger font-semibold uppercase tracking-wider mb-1.5">¿Qué pasó con la diferencia?</label>
                 <input type="text" value={openExplanation} onChange={e => setOpenExplanation(e.target.value)} placeholder="Explica el faltante o sobrante…"
-                  className="w-full bg-[#121212] border border-[#5a1818] rounded-xl px-4 py-2.5 text-[#e1e2e4] text-sm focus:border-[#ffb4ab] outline-none transition-colors" />
+                  className="w-full bg-bg border border-danger rounded-xl px-4 py-2.5 text-ink text-sm focus:border-danger outline-none transition-colors" />
               </div>
             )}
             <div>
-              <label className="block text-xs text-[#8a9295] font-semibold uppercase tracking-wider mb-1.5">Notas (opcional)</label>
+              <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">Notas (opcional)</label>
               <input type="text" value={openNotes} onChange={e => setOpenNotes(e.target.value)} placeholder="Observaciones…"
-                className="w-full bg-[#121212] border border-[#333] rounded-xl px-4 py-2.5 text-[#e1e2e4] text-sm focus:border-[#9acee1] outline-none transition-colors" />
+                className="w-full bg-bg border border-line rounded-xl px-4 py-2.5 text-ink text-sm focus:border-primary outline-none transition-colors" />
             </div>
-            {error && <div className="text-[#ffb4ab] text-sm">{error}</div>}
+            {error && <div className="text-danger text-sm">{error}</div>}
             <div className="grid grid-cols-2 gap-2">
               <button onClick={handleOpen} disabled={openBusy || (openNeedsExplanation && !openExplanation.trim())}
-                className="h-11 bg-[#12533a] hover:bg-[#1a6b45] disabled:opacity-40 text-[#95d4b3] font-bold rounded-xl transition-colors">
+                className="h-11 bg-success-soft hover:bg-success-soft disabled:opacity-40 text-success font-bold rounded-xl transition-colors">
                 {openBusy ? 'Abriendo…' : 'Abrir caja'}
               </button>
               <button onClick={() => { setShowOpen(false); setError(''); }}
-                className="h-11 bg-[#1d2021] border border-[#333] text-[#c0c8cb] font-semibold rounded-xl hover:bg-[#282a2b] transition-colors">
+                className="h-11 bg-surface-2 border border-line text-ink-2 font-semibold rounded-xl hover:bg-surface-3 transition-colors">
                 Cancelar
               </button>
             </div>
@@ -361,63 +361,63 @@ export default function CajaCajero() {
       {/* ── Modal: cerrar caja ── */}
       {showClose && (
         <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-          <div className="bg-[#1E1E1E] border border-[#333] rounded-t-2xl sm:rounded-2xl w-full max-w-sm p-6 space-y-4">
+          <div className="bg-surface border border-line rounded-t-2xl sm:rounded-2xl w-full max-w-sm p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="font-bold text-[#e1e2e4] text-lg">Cerrar caja</h2>
-              <button onClick={() => { setShowClose(false); setError(''); }} className="text-[#8a9295] hover:text-[#e1e2e4]">
+              <h2 className="font-bold text-ink text-lg">Cerrar caja</h2>
+              <button onClick={() => { setShowClose(false); setError(''); }} className="text-ink-3 hover:text-ink">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
-            <div className="bg-[#121212] border border-[#333] rounded-xl p-4 space-y-3">
+            <div className="bg-bg border border-line rounded-xl p-4 space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <div>
-                  <div className="text-[#8a9295] text-[10px] uppercase tracking-wider">Apertura</div>
-                  <div className="text-[#e1e2e4] font-bold tabular-nums">{COP(session?.opening_amount || 0)}</div>
+                  <div className="text-ink-3 text-[10px] uppercase tracking-wider">Apertura</div>
+                  <div className="text-ink font-bold tabular-nums">{COP(session?.opening_amount || 0)}</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-[#8a9295] text-[10px] uppercase tracking-wider">Ventas efectivo</div>
-                  <div className="text-[#95d4b3] font-bold tabular-nums">{COP(cashSales)}</div>
+                  <div className="text-ink-3 text-[10px] uppercase tracking-wider">Ventas efectivo</div>
+                  <div className="text-success font-bold tabular-nums">{COP(cashSales)}</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[#8a9295] text-[10px] uppercase tracking-wider">Movimientos</div>
-                  <div className={`font-bold tabular-nums ${totalMov >= 0 ? 'text-[#95d4b3]' : 'text-[#ffb4ab]'}`}>{COP(totalMov)}</div>
+                  <div className="text-ink-3 text-[10px] uppercase tracking-wider">Movimientos</div>
+                  <div className={`font-bold tabular-nums ${totalMov >= 0 ? 'text-success' : 'text-danger'}`}>{COP(totalMov)}</div>
                 </div>
               </div>
-              <div className="flex items-center justify-between border-t border-[#333] pt-3">
-                <div className="text-[#95d4b3] text-[11px] uppercase tracking-wider font-bold">Efectivo esperado</div>
-                <div className="text-[#95d4b3] font-black text-lg tabular-nums">{COP(expected)}</div>
+              <div className="flex items-center justify-between border-t border-line pt-3">
+                <div className="text-success text-[11px] uppercase tracking-wider font-bold">Efectivo esperado</div>
+                <div className="text-success font-black text-lg tabular-nums">{COP(expected)}</div>
               </div>
             </div>
             <div>
-              <label className="block text-xs text-[#8a9295] font-semibold uppercase tracking-wider mb-1.5">Efectivo contado</label>
+              <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">Efectivo contado</label>
               <input type="number" value={closeAmount} onChange={e => setCloseAmount(e.target.value)} placeholder="0" autoFocus
-                className="w-full bg-[#121212] border border-[#333] rounded-xl px-4 py-2.5 text-[#e1e2e4] text-sm focus:border-[#9acee1] outline-none transition-colors" />
+                className="w-full bg-bg border border-line rounded-xl px-4 py-2.5 text-ink text-sm focus:border-primary outline-none transition-colors" />
             </div>
             {closeDiff != null && (
               <div className={`flex items-center justify-between rounded-xl px-4 py-2.5 text-sm font-bold ${
                 closeDiff === 0
-                  ? 'bg-[#12533a]/30 border border-[#95d4b3]/40 text-[#95d4b3]'
+                  ? 'bg-success-soft/30 border border-success/40 text-success'
                   : closeDiff > 0
-                    ? 'bg-[#0f4c5c]/30 border border-[#9acee1]/40 text-[#9acee1]'
-                    : 'bg-[#3a1010] border border-[#5a1818] text-[#ffb4ab]'
+                    ? 'bg-primary-soft/30 border border-primary/40 text-primary'
+                    : 'bg-danger-soft border border-danger text-danger'
               }`}>
                 <span>{closeDiff === 0 ? 'Caja cuadrada' : closeDiff > 0 ? 'Sobrante' : 'Faltante'}</span>
                 <span className="tabular-nums">{COP(Math.abs(closeDiff))}</span>
               </div>
             )}
             <div>
-              <label className="block text-xs text-[#8a9295] font-semibold uppercase tracking-wider mb-1.5">Notas (opcional)</label>
+              <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">Notas (opcional)</label>
               <input type="text" value={closeNotes} onChange={e => setCloseNotes(e.target.value)} placeholder="Observaciones al cierre…"
-                className="w-full bg-[#121212] border border-[#333] rounded-xl px-4 py-2.5 text-[#e1e2e4] text-sm focus:border-[#9acee1] outline-none transition-colors" />
+                className="w-full bg-bg border border-line rounded-xl px-4 py-2.5 text-ink text-sm focus:border-primary outline-none transition-colors" />
             </div>
-            {error && <div className="text-[#ffb4ab] text-sm">{error}</div>}
+            {error && <div className="text-danger text-sm">{error}</div>}
             <div className="grid grid-cols-2 gap-2">
               <button onClick={handleClose} disabled={closeBusy}
-                className="h-11 bg-[#93000a] hover:bg-[#b00010] disabled:opacity-40 text-[#ffdad6] font-bold rounded-xl transition-colors">
+                className="h-11 bg-danger-soft hover:bg-danger disabled:opacity-40 text-danger font-bold rounded-xl transition-colors">
                 {closeBusy ? 'Cerrando…' : 'Cerrar caja'}
               </button>
               <button onClick={() => { setShowClose(false); setError(''); }}
-                className="h-11 bg-[#1d2021] border border-[#333] text-[#c0c8cb] font-semibold rounded-xl hover:bg-[#282a2b] transition-colors">
+                className="h-11 bg-surface-2 border border-line text-ink-2 font-semibold rounded-xl hover:bg-surface-3 transition-colors">
                 Cancelar
               </button>
             </div>
@@ -428,10 +428,10 @@ export default function CajaCajero() {
       {/* ── Modal: movimiento ── */}
       {showMove && (
         <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-          <div className="bg-[#1E1E1E] border border-[#333] rounded-t-2xl sm:rounded-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-surface border border-line rounded-t-2xl sm:rounded-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between">
-              <h2 className="font-bold text-[#e1e2e4] text-lg">Movimiento de caja</h2>
-              <button onClick={() => { setShowMove(false); setError(''); }} className="text-[#8a9295] hover:text-[#e1e2e4]">
+              <h2 className="font-bold text-ink text-lg">Movimiento de caja</h2>
+              <button onClick={() => { setShowMove(false); setError(''); }} className="text-ink-3 hover:text-ink">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
@@ -441,16 +441,16 @@ export default function CajaCajero() {
               <button onClick={() => handleDirection('out')}
                 className={`h-10 rounded-xl font-bold text-sm transition-colors ${
                   movDirection === 'out'
-                    ? 'bg-[#93000a]/30 border border-[#ffb4ab] text-[#ffb4ab]'
-                    : 'bg-[#1d2021] border border-[#333] text-[#8a9295]'
+                    ? 'bg-danger-soft/30 border border-danger text-danger'
+                    : 'bg-surface-2 border border-line text-ink-3'
                 }`}>
                 ↓ Sale dinero
               </button>
               <button onClick={() => handleDirection('in')}
                 className={`h-10 rounded-xl font-bold text-sm transition-colors ${
                   movDirection === 'in'
-                    ? 'bg-[#12533a]/40 border border-[#95d4b3] text-[#95d4b3]'
-                    : 'bg-[#1d2021] border border-[#333] text-[#8a9295]'
+                    ? 'bg-success-soft/40 border border-success text-success'
+                    : 'bg-surface-2 border border-line text-ink-3'
                 }`}>
                 ↑ Entra dinero
               </button>
@@ -458,15 +458,15 @@ export default function CajaCajero() {
 
             {/* Motivo */}
             <div>
-              <label className="block text-xs text-[#8a9295] font-semibold uppercase tracking-wider mb-1.5">Motivo</label>
+              <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">Motivo</label>
               <div className="grid grid-cols-2 gap-2">
                 {motivosForDir.map(opt => (
                   <button key={opt.value} type="button"
                     onClick={() => { setMotivo(opt.value); resetMovementFields(); }}
                     className={`px-3 py-2 rounded-xl text-sm font-semibold border transition-colors text-left ${
                       motivo === opt.value
-                        ? 'bg-[#0f4c5c]/30 border-[#9acee1] text-[#9acee1]'
-                        : 'bg-[#121212] border-[#2a2a2a] text-[#8a9295] hover:text-[#c0c8cb] hover:border-[#444]'
+                        ? 'bg-primary-soft/30 border-primary text-primary'
+                        : 'bg-bg border-line text-ink-3 hover:text-ink-2 hover:border-line-strong'
                     }`}>
                     {opt.label}
                   </button>
@@ -478,17 +478,17 @@ export default function CajaCajero() {
                 si no aparece, el cajero lo deja en la nota. */}
             {motivo === 'pago_proveedor' && (
               <div>
-                <label className="block text-xs text-[#8a9295] font-semibold uppercase tracking-wider mb-1.5">Proveedor</label>
+                <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">Proveedor</label>
                 {selectedSupplier ? (
-                  <div className="flex items-center justify-between bg-[#0f4c5c]/30 border border-[#9acee1]/40 rounded-xl px-4 py-2.5">
+                  <div className="flex items-center justify-between bg-primary-soft/30 border border-primary/40 rounded-xl px-4 py-2.5">
                     <div className="min-w-0">
-                      <div className="text-[#9acee1] text-sm font-semibold truncate">{selectedSupplier.name}</div>
+                      <div className="text-primary text-sm font-semibold truncate">{selectedSupplier.name}</div>
                       {selectedSupplier.company && (
-                        <div className="text-[#8a9295] text-xs truncate">{selectedSupplier.company}</div>
+                        <div className="text-ink-3 text-xs truncate">{selectedSupplier.company}</div>
                       )}
                     </div>
                     <button type="button" onClick={() => { setSelectedSupplier(null); setSupplierQuery(''); }}
-                      className="text-[#8a9295] text-xs font-semibold hover:text-[#e1e2e4] shrink-0 ml-2">
+                      className="text-ink-3 text-xs font-semibold hover:text-ink shrink-0 ml-2">
                       Cambiar
                     </button>
                   </div>
@@ -496,23 +496,23 @@ export default function CajaCajero() {
                   <>
                     <input type="text" value={supplierQuery} onChange={e => setSupplierQuery(e.target.value)}
                       placeholder="Buscar proveedor…"
-                      className="w-full bg-[#121212] border border-[#333] rounded-xl px-4 py-2.5 text-[#e1e2e4] text-sm focus:border-[#9acee1] outline-none transition-colors" />
+                      className="w-full bg-bg border border-line rounded-xl px-4 py-2.5 text-ink text-sm focus:border-primary outline-none transition-colors" />
                     {supplierLoading ? (
-                      <div className="text-[#8a9295] text-xs mt-1.5">Cargando proveedores…</div>
+                      <div className="text-ink-3 text-xs mt-1.5">Cargando proveedores…</div>
                     ) : suppliers.length === 0 ? (
-                      <div className="text-[#8a9295] text-xs mt-1.5">No hay proveedores registrados. Escribe el nombre en la nota.</div>
+                      <div className="text-ink-3 text-xs mt-1.5">No hay proveedores registrados. Escribe el nombre en la nota.</div>
                     ) : filteredSuppliers.length > 0 ? (
-                      <div className="mt-1.5 max-h-40 overflow-y-auto rounded-xl border border-[#2a2a2a] divide-y divide-[#2a2a2a]">
+                      <div className="mt-1.5 max-h-40 overflow-y-auto rounded-xl border border-line divide-y divide-line">
                         {filteredSuppliers.slice(0, 8).map(s => (
                           <button key={s.id} type="button" onClick={() => { setSelectedSupplier(s); setSupplierQuery(''); }}
-                            className="w-full text-left px-4 py-2.5 bg-[#1E1E1E] hover:bg-[#282a2b] transition-colors">
-                            <div className="text-[#e1e2e4] text-sm font-medium truncate">{s.name}</div>
-                            {s.company && <div className="text-[#8a9295] text-xs truncate">{s.company}</div>}
+                            className="w-full text-left px-4 py-2.5 bg-surface hover:bg-surface-3 transition-colors">
+                            <div className="text-ink text-sm font-medium truncate">{s.name}</div>
+                            {s.company && <div className="text-ink-3 text-xs truncate">{s.company}</div>}
                           </button>
                         ))}
                       </div>
                     ) : (
-                      <div className="text-[#8a9295] text-xs mt-1.5">Sin coincidencias. Escribe el nombre en la nota.</div>
+                      <div className="text-ink-3 text-xs mt-1.5">Sin coincidencias. Escribe el nombre en la nota.</div>
                     )}
                   </>
                 )}
@@ -521,14 +521,14 @@ export default function CajaCajero() {
 
             {/* Monto */}
             <div>
-              <label className="block text-xs text-[#8a9295] font-semibold uppercase tracking-wider mb-1.5">Monto</label>
+              <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">Monto</label>
               <input type="number" value={moveAmount} onChange={e => setMoveAmount(e.target.value)} placeholder="0"
-                className="w-full bg-[#121212] border border-[#333] rounded-xl px-4 py-2.5 text-[#e1e2e4] text-sm focus:border-[#9acee1] outline-none transition-colors" />
+                className="w-full bg-bg border border-line rounded-xl px-4 py-2.5 text-ink text-sm focus:border-primary outline-none transition-colors" />
             </div>
 
             {/* Nota con presets rápidos */}
             <div>
-              <label className="block text-xs text-[#8a9295] font-semibold uppercase tracking-wider mb-1.5">
+              <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">
                 {motivo === 'otro' ? 'Descripción' : 'Nota (opcional)'}
               </label>
               {reasonPresets.length > 0 && (
@@ -537,8 +537,8 @@ export default function CajaCajero() {
                     <button key={r} type="button" onClick={() => setMoveReason(r)}
                       className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors border ${
                         moveReason === r
-                          ? 'bg-[#0f4c5c]/30 border-[#9acee1]/40 text-[#9acee1]'
-                          : 'bg-[#121212] border-[#2a2a2a] text-[#8a9295] hover:text-[#c0c8cb] hover:border-[#444]'
+                          ? 'bg-primary-soft/30 border-primary/40 text-primary'
+                          : 'bg-bg border-line text-ink-3 hover:text-ink-2 hover:border-line-strong'
                       }`}>
                       {r}
                     </button>
@@ -547,18 +547,18 @@ export default function CajaCajero() {
               )}
               <input type="text" value={moveReason} onChange={e => setMoveReason(e.target.value)}
                 placeholder={motivo === 'otro' ? 'Describe el motivo…' : 'Detalle adicional…'}
-                className="w-full bg-[#121212] border border-[#333] rounded-xl px-4 py-2.5 text-[#e1e2e4] text-sm focus:border-[#9acee1] outline-none transition-colors" />
+                className="w-full bg-bg border border-line rounded-xl px-4 py-2.5 text-ink text-sm focus:border-primary outline-none transition-colors" />
             </div>
 
-            {error && <div className="text-[#ffb4ab] text-sm">{error}</div>}
+            {error && <div className="text-danger text-sm">{error}</div>}
 
             <div className="grid grid-cols-2 gap-2">
               <button onClick={handleMove} disabled={moveBusy}
-                className="h-11 bg-[#0f4c5c] hover:bg-[#155a6d] disabled:opacity-40 text-[#9acee1] font-bold rounded-xl transition-colors">
+                className="h-11 bg-primary-soft hover:bg-primary-soft disabled:opacity-40 text-primary font-bold rounded-xl transition-colors">
                 {moveBusy ? 'Guardando…' : 'Registrar'}
               </button>
               <button onClick={() => { setShowMove(false); setError(''); }}
-                className="h-11 bg-[#1d2021] border border-[#333] text-[#c0c8cb] font-semibold rounded-xl hover:bg-[#282a2b] transition-colors">
+                className="h-11 bg-surface-2 border border-line text-ink-2 font-semibold rounded-xl hover:bg-surface-3 transition-colors">
                 Cancelar
               </button>
             </div>
