@@ -11,12 +11,12 @@ const LIMIT = 50;
 
 function paymentBadgeClass(pt: string) {
   const p = (pt || '').toLowerCase();
-  if (p === 'efectivo' || p === 'cash') return 'bg-[#12533a] text-[#87c6a5]';
-  if (p === 'fiado')                    return 'bg-[#5d4000] text-[#ffba27]';
+  if (p === 'efectivo' || p === 'cash') return 'bg-success-soft text-success';
+  if (p === 'fiado')                    return 'bg-warn-soft text-warn';
   if (p.includes('transfer') || p.includes('nequi') || p.includes('daviplata') ||
       p.includes('llave') || p.includes('banco'))
-    return 'bg-[#0f4c5c] text-[#9acee1]';
-  return 'bg-[#0f4c5c] text-[#87bbce]';
+    return 'bg-primary-soft text-primary';
+  return 'bg-primary-soft text-primary';
 }
 
 function relativeDate(iso: string) {
@@ -160,18 +160,18 @@ export default function VentasCajero({ session }: Props) {
   const totalValue = items.reduce((s, v) => s + Number(v.total), 0);
 
   return (
-    <div className="h-full overflow-y-auto bg-[#111415]">
+    <div className="h-full overflow-y-auto bg-bg">
       <div className="max-w-5xl mx-auto px-6 py-6 pb-24 space-y-4">
 
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-white font-black text-2xl tracking-tight">Mis ventas</h1>
-            <p className="text-[#8a9295] text-xs mt-0.5">
+            <h1 className="text-ink font-black text-2xl tracking-tight">Mis ventas</h1>
+            <p className="text-ink-3 text-xs mt-0.5">
               Solo se muestran las ventas que registraste tú.
             </p>
           </div>
-          <span className="text-[#8a9295] text-sm">
+          <span className="text-ink-3 text-sm">
             {new Date().toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'America/Bogota' })}
           </span>
         </div>
@@ -180,12 +180,12 @@ export default function VentasCajero({ session }: Props) {
         <div className="space-y-2">
           <div className="flex flex-wrap gap-3 items-center">
             <div className="relative flex-1 min-w-[220px]">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#8a9295] text-[18px]">search</span>
+              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-ink-3 text-[18px]">search</span>
               <input
                 value={search}
                 onChange={e => handleSearchChange(e.target.value)}
                 placeholder="Buscar por producto, cliente o #ID..."
-                className="w-full bg-[#1E1E1E] border border-[#333333] rounded-xl h-10 pl-9 pr-3 text-[#e1e2e4] text-sm focus:border-[#9acee1] transition-colors"
+                className="w-full bg-surface border border-line rounded-xl h-10 pl-9 pr-3 text-ink text-sm focus:border-primary transition-colors"
               />
             </div>
             <DateRangePicker
@@ -194,7 +194,7 @@ export default function VentasCajero({ session }: Props) {
             />
             {hasFilters && (
               <button onClick={clearFilters}
-                className="flex items-center gap-1.5 h-10 px-3 bg-[#1E1E1E] border border-[#333333] hover:border-[#ffb4ab] text-[#8a9295] hover:text-[#ffb4ab] text-sm font-medium rounded-xl transition-colors">
+                className="flex items-center gap-1.5 h-10 px-3 bg-surface border border-line hover:border-danger text-ink-3 hover:text-danger text-sm font-medium rounded-xl transition-colors">
                 <span className="material-symbols-outlined text-[16px]">close</span>
                 Limpiar
               </button>
@@ -213,11 +213,11 @@ export default function VentasCajero({ session }: Props) {
                 onClick={() => { setPaymentFilter(opt.value); setPage(0); }}
                 className={`flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold transition-colors border ${
                   paymentFilter === opt.value
-                    ? opt.value === ''         ? 'bg-[#1E1E1E] border-[#9acee1] text-[#9acee1]'
-                    : opt.value === 'efectivo' ? 'bg-[#12533a]/60 border-[#12533a] text-[#87c6a5]'
-                    : opt.value === 'fiado'    ? 'bg-[#5d4000]/60 border-[#5d4000] text-[#ffba27]'
-                    : 'bg-[#0f4c5c]/60 border-[#0f4c5c] text-[#9acee1]'
-                    : 'bg-transparent border-[#333333] text-[#8a9295] hover:border-[#40484b] hover:text-[#c0c8cb]'
+                    ? opt.value === ''         ? 'bg-surface border-primary text-primary'
+                    : opt.value === 'efectivo' ? 'bg-success-soft/60 border-success text-success'
+                    : opt.value === 'fiado'    ? 'bg-warn-soft/60 border-warn text-warn'
+                    : 'bg-primary-soft/60 border-primary text-primary'
+                    : 'bg-transparent border-line text-ink-3 hover:border-line-strong hover:text-ink-2'
                 }`}>
                 <span className="material-symbols-outlined text-[14px]">{opt.icon}</span>
                 {opt.label}
@@ -229,45 +229,45 @@ export default function VentasCajero({ session }: Props) {
         {/* Results summary */}
         {!loading && result && (
           <div className="flex items-center justify-between text-sm">
-            <span className="text-[#8a9295]">
+            <span className="text-ink-3">
               {total === 0 ? 'Sin resultados' : `${total} venta${total !== 1 ? 's' : ''} · `}
-              {total > 0 && <span className="text-[#95d4b3] font-semibold">+${totalValue.toLocaleString('es-CO')}</span>}
+              {total > 0 && <span className="text-success font-semibold">+${totalValue.toLocaleString('es-CO')}</span>}
             </span>
             {total > 0 && totalPages > 1 && (
-              <span className="text-[#8a9295] text-xs">{from}–{to} de {total}</span>
+              <span className="text-ink-3 text-xs">{from}–{to} de {total}</span>
             )}
           </div>
         )}
 
         {/* Table */}
         {loading ? (
-          <div className="flex items-center justify-center py-20 text-[#8a9295]">
+          <div className="flex items-center justify-center py-20 text-ink-3">
             <span className="material-symbols-outlined animate-spin mr-2">progress_activity</span>
             Cargando...
           </div>
         ) : items.length === 0 ? (
-          <div className="text-center py-20 text-[#8a9295]">
+          <div className="text-center py-20 text-ink-3">
             <span className="material-symbols-outlined text-5xl block mb-3">receipt_long</span>
             <p>Sin ventas{hasFilters ? ' con estos filtros' : ' registradas'}</p>
             {hasFilters && (
-              <button onClick={clearFilters} className="mt-2 text-[#9acee1] text-sm font-semibold hover:underline">
+              <button onClick={clearFilters} className="mt-2 text-primary text-sm font-semibold hover:underline">
                 Limpiar filtros
               </button>
             )}
           </div>
         ) : (
-          <div className="bg-[#1E1E1E] border border-[#333333] rounded-xl overflow-hidden">
+          <div className="bg-surface border border-line rounded-xl overflow-hidden">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-[#333333] bg-[#121212]/50">
-                  <th className="px-5 py-3.5 text-[#8a9295] text-xs font-semibold uppercase tracking-wider">#</th>
-                  <th className="px-5 py-3.5 text-[#8a9295] text-xs font-semibold uppercase tracking-wider">Fecha y hora</th>
-                  <th className="px-5 py-3.5 text-[#8a9295] text-xs font-semibold uppercase tracking-wider">Productos</th>
-                  <th className="px-5 py-3.5 text-[#8a9295] text-xs font-semibold uppercase tracking-wider">Método</th>
-                  <th className="px-5 py-3.5 text-[#8a9295] text-xs font-semibold uppercase tracking-wider text-right">Total</th>
+                <tr className="border-b border-line bg-bg/50">
+                  <th className="px-5 py-3.5 text-ink-3 text-xs font-semibold uppercase tracking-wider">#</th>
+                  <th className="px-5 py-3.5 text-ink-3 text-xs font-semibold uppercase tracking-wider">Fecha y hora</th>
+                  <th className="px-5 py-3.5 text-ink-3 text-xs font-semibold uppercase tracking-wider">Productos</th>
+                  <th className="px-5 py-3.5 text-ink-3 text-xs font-semibold uppercase tracking-wider">Método</th>
+                  <th className="px-5 py-3.5 text-ink-3 text-xs font-semibold uppercase tracking-wider text-right">Total</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#333333]">
+              <tbody className="divide-y divide-line">
                 {items.map(sale => {
                   const isFiado = sale.paymentType?.toLowerCase() === 'fiado';
                   const fiadoInfo = isFiado ? parseFiadoNotes(sale.notes) : null;
@@ -282,22 +282,22 @@ export default function VentasCajero({ session }: Props) {
                     <>
                       <tr key={sale.id}
                         onClick={() => setExpanded(isExpanded ? null : sale.id)}
-                        className="hover:bg-[#2A2A2A] transition-colors cursor-pointer group">
+                        className="hover:bg-surface-3 transition-colors cursor-pointer group">
                         <td className="px-5 py-3.5">
-                          <span className="text-[#9acee1] font-mono text-sm font-bold group-hover:underline">
+                          <span className="text-primary font-mono text-sm font-bold group-hover:underline">
                             #{sale.id.slice(0, 6).toUpperCase()}
                           </span>
                         </td>
-                        <td className="px-5 py-3.5 text-[#8a9295] text-sm whitespace-nowrap">
+                        <td className="px-5 py-3.5 text-ink-3 text-sm whitespace-nowrap">
                           {sale.createdAt ? relativeDate(sale.createdAt) : '—'}
                         </td>
                         <td className="px-5 py-3.5">
-                          <span className="text-[#c0c8cb] text-sm truncate max-w-[220px] block">
+                          <span className="text-ink-2 text-sm truncate max-w-[220px] block">
                             {itemNames || '—'}
-                            {extraItems > 0 && <span className="text-[#8a9295]"> +{extraItems} más</span>}
+                            {extraItems > 0 && <span className="text-ink-3"> +{extraItems} más</span>}
                           </span>
                           {isFiado && fiadoInfo?.[0] && (
-                            <span className="text-[#ffba27] text-xs">{fiadoInfo[0].replace('Cliente: ', '')}</span>
+                            <span className="text-warn text-xs">{fiadoInfo[0].replace('Cliente: ', '')}</span>
                           )}
                         </td>
                         <td className="px-5 py-3.5">
@@ -310,19 +310,19 @@ export default function VentasCajero({ session }: Props) {
                           </div>
                         </td>
                         <td className="px-5 py-3.5 text-right">
-                          <span className="text-[#95d4b3] font-bold text-sm">
+                          <span className="text-success font-bold text-sm">
                             +${Number(sale.total).toLocaleString('es-CO')}
                           </span>
                         </td>
                       </tr>
 
                       {isExpanded && (
-                        <tr key={`${sale.id}-detail`} className="bg-[#121212]/50">
+                        <tr key={`${sale.id}-detail`} className="bg-bg/50">
                           <td colSpan={5} className="px-8 py-3 space-y-2">
                             {isFiado && fiadoInfo && fiadoInfo.length > 1 && (
-                              <div className="flex flex-wrap gap-2 pb-2 border-b border-[#333333]">
+                              <div className="flex flex-wrap gap-2 pb-2 border-b border-line">
                                 {fiadoInfo.map((info, i) => (
-                                  <span key={i} className="flex items-center gap-1 text-xs text-[#ffba27] bg-[#5d4000]/40 px-2.5 py-1 rounded-lg">
+                                  <span key={i} className="flex items-center gap-1 text-xs text-warn bg-warn-soft/40 px-2.5 py-1 rounded-lg">
                                     <span className="material-symbols-outlined text-[11px]">
                                       {info.startsWith('Cliente:') ? 'person' : info.startsWith('Tel:') ? 'phone' : 'note'}
                                     </span>
@@ -334,22 +334,22 @@ export default function VentasCajero({ session }: Props) {
                             <div className="space-y-1">
                               {(sale.items ?? []).map((item, i) => (
                                 <div key={i} className="flex items-center justify-between text-sm">
-                                  <span className="text-[#c0c8cb]">{item.productName} × {formatQty(item.qty, item.unitType)}</span>
-                                  <span className="text-[#8a9295] font-mono">${Number(item.subtotal).toLocaleString('es-CO')}</span>
+                                  <span className="text-ink-2">{item.productName} × {formatQty(item.qty, item.unitType)}</span>
+                                  <span className="text-ink-3 font-mono">${Number(item.subtotal).toLocaleString('es-CO')}</span>
                                 </div>
                               ))}
                             </div>
-                            <div className="flex justify-between border-t border-[#333333] pt-2 mt-1 items-center">
-                              <span className="text-[#8a9295] text-xs">Total</span>
+                            <div className="flex justify-between border-t border-line pt-2 mt-1 items-center">
+                              <span className="text-ink-3 text-xs">Total</span>
                               <div className="flex items-center gap-3">
-                                <span className="text-[#95d4b3] font-bold text-sm">${Number(sale.total).toLocaleString('es-CO')}</span>
+                                <span className="text-success font-bold text-sm">${Number(sale.total).toLocaleString('es-CO')}</span>
                                 {(() => {
                                   const allReturned = sale.status === 'returned' ||
                                     ((sale.items ?? []).length > 0 &&
                                     (sale.items ?? []).every(it => (it.returnedQty ?? 0) >= Number(it.qty)));
                                   const someReturned = !allReturned && (sale.items ?? []).some(it => (it.returnedQty ?? 0) > 0);
                                   if (allReturned) return (
-                                    <span className="flex items-center gap-1 text-[10px] font-semibold text-[#8a9295] bg-[#282a2b] px-2 py-1 rounded-lg cursor-default">
+                                    <span className="flex items-center gap-1 text-[10px] font-semibold text-ink-3 bg-surface-3 px-2 py-1 rounded-lg cursor-default">
                                       <span className="material-symbols-outlined text-[12px]">check_circle</span>
                                       Devuelta
                                     </span>
@@ -389,7 +389,7 @@ export default function VentasCajero({ session }: Props) {
                                           setReturnRefundMethod('Efectivo');
                                         });
                                       }}
-                                      className="flex items-center gap-1 text-[10px] font-semibold text-[#ffba27] bg-[#5d4000]/40 hover:bg-[#5d4000]/70 px-2 py-1 rounded-lg transition-colors">
+                                      className="flex items-center gap-1 text-[10px] font-semibold text-warn bg-warn-soft/40 hover:bg-warn-soft/70 px-2 py-1 rounded-lg transition-colors">
                                       <span className="material-symbols-outlined text-[12px]">undo</span>
                                       {someReturned ? 'Dev. parcial' : 'Devolución'}
                                     </button>
@@ -408,17 +408,17 @@ export default function VentasCajero({ session }: Props) {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="px-5 py-3.5 border-t border-[#333333] bg-[#121212]/30 flex items-center justify-between">
-                <span className="text-[#8a9295] text-xs">{from}–{to} de {total} ventas</span>
+              <div className="px-5 py-3.5 border-t border-line bg-bg/30 flex items-center justify-between">
+                <span className="text-ink-3 text-xs">{from}–{to} de {total} ventas</span>
                 <div className="flex items-center gap-2">
                   <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
-                    className="flex items-center gap-1 h-8 px-3 bg-[#1d2021] border border-[#333333] text-[#c0c8cb] hover:text-[#9acee1] hover:border-[#9acee1] text-xs font-semibold rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                    className="flex items-center gap-1 h-8 px-3 bg-surface-2 border border-line text-ink-2 hover:text-primary hover:border-primary text-xs font-semibold rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
                     <span className="material-symbols-outlined text-[16px]">chevron_left</span>
                     Anterior
                   </button>
-                  <span className="text-[#8a9295] text-xs px-1">{page + 1} / {totalPages}</span>
+                  <span className="text-ink-3 text-xs px-1">{page + 1} / {totalPages}</span>
                   <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1}
-                    className="flex items-center gap-1 h-8 px-3 bg-[#1d2021] border border-[#333333] text-[#c0c8cb] hover:text-[#9acee1] hover:border-[#9acee1] text-xs font-semibold rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                    className="flex items-center gap-1 h-8 px-3 bg-surface-2 border border-line text-ink-2 hover:text-primary hover:border-primary text-xs font-semibold rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
                     Siguiente
                     <span className="material-symbols-outlined text-[16px]">chevron_right</span>
                   </button>
@@ -432,32 +432,32 @@ export default function VentasCajero({ session }: Props) {
       {/* ── Return modal ── */}
       {returnSale && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-[#1E1E1E] border border-[#333] rounded-2xl w-full max-w-sm p-6 space-y-4 shadow-2xl">
+          <div className="bg-surface border border-line rounded-2xl w-full max-w-sm p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="font-bold text-[#e1e2e4]">Procesar devolución</h2>
-                <p className="text-[#8a9295] text-xs mt-0.5">
+                <h2 className="font-bold text-ink">Procesar devolución</h2>
+                <p className="text-ink-3 text-xs mt-0.5">
                   Venta #{returnSale.id.slice(0,6).toUpperCase()} · ${Number(returnSale.total).toLocaleString('es-CO')}
                 </p>
               </div>
-              <button onClick={() => setReturnSale(null)} className="text-[#8a9295] hover:text-[#e1e2e4]">
+              <button onClick={() => setReturnSale(null)} className="text-ink-3 hover:text-ink">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
 
             {returnSuccess ? (
               <div className="text-center py-4">
-                <span className="material-symbols-outlined text-[#95d4b3] text-4xl block mb-2">check_circle</span>
-                <p className="text-[#95d4b3] font-semibold">Devolución registrada</p>
-                <p className="text-[#8a9295] text-xs mt-1">El stock fue actualizado en inventario</p>
-                <button onClick={() => setReturnSale(null)} className="mt-4 h-10 px-6 bg-[#12533a] text-[#95d4b3] font-bold rounded-xl hover:bg-[#1a6b45] transition-colors">
+                <span className="material-symbols-outlined text-success text-4xl block mb-2">check_circle</span>
+                <p className="text-success font-semibold">Devolución registrada</p>
+                <p className="text-ink-3 text-xs mt-1">El stock fue actualizado en inventario</p>
+                <button onClick={() => setReturnSale(null)} className="mt-4 h-10 px-6 bg-success-soft text-success font-bold rounded-xl hover:bg-success-soft transition-colors">
                   Cerrar
                 </button>
               </div>
             ) : (
               <>
                 <div className="space-y-2">
-                  <p className="text-[#8a9295] text-xs font-semibold uppercase tracking-wider">Selecciona qué se devuelve</p>
+                  <p className="text-ink-3 text-xs font-semibold uppercase tracking-wider">Selecciona qué se devuelve</p>
                   {(returnSale.items ?? []).map((item, i) => {
                     const alreadyReturned = item.returnedQty ?? 0;
                     const maxReturnable = Number(item.qty) - alreadyReturned;
@@ -465,7 +465,7 @@ export default function VentasCajero({ session }: Props) {
                     const checked = returnSelected.has(i) && !fullyReturned;
                     const qty = returnQtys[i] ?? maxReturnable;
                     return (
-                      <div key={i} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${fullyReturned ? 'bg-[#121212] border-[#2a2a2a] opacity-40 cursor-not-allowed' : checked ? 'bg-[#0f4c5c]/20 border-[#9acee1]/30' : 'bg-[#121212] border-[#2a2a2a] opacity-50'}`}>
+                      <div key={i} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${fullyReturned ? 'bg-bg border-line opacity-40 cursor-not-allowed' : checked ? 'bg-primary-soft/20 border-primary/30' : 'bg-bg border-line opacity-50'}`}>
                         <input type="checkbox" checked={checked} disabled={fullyReturned}
                           onChange={e => {
                             const next = new Set(returnSelected);
@@ -477,27 +477,27 @@ export default function VentasCajero({ session }: Props) {
                           }}
                           className="w-4 h-4 rounded accent-[#9acee1] cursor-pointer disabled:cursor-not-allowed" />
                         <div className="flex-1 min-w-0">
-                          <span className="text-[#c0c8cb] text-sm block truncate">{item.productName}</span>
+                          <span className="text-ink-2 text-sm block truncate">{item.productName}</span>
                           {alreadyReturned > 0 && (
-                            <span className="text-[10px] text-[#ef8b8b] font-semibold">
+                            <span className="text-[10px] text-danger font-semibold">
                               {formatQty(alreadyReturned, item.unitType)} ya devuelta{alreadyReturned > 1 ? 's' : ''}
                             </span>
                           )}
                         </div>
                         {fullyReturned ? (
-                          <span className="text-[10px] text-[#8a9295] font-semibold px-2">Devuelto</span>
+                          <span className="text-[10px] text-ink-3 font-semibold px-2">Devuelto</span>
                         ) : (
                           <div className="flex items-center gap-1">
                             <button onClick={() => setReturnQtys(q => ({ ...q, [i]: Math.max(1, (q[i] ?? maxReturnable) - 1) }))}
                               disabled={!checked}
-                              className="w-6 h-6 bg-[#282a2b] rounded-lg text-[#8a9295] text-sm font-bold disabled:opacity-30">−</button>
-                            <span className="text-[#e1e2e4] font-bold text-sm w-10 text-center tabular-nums">{formatQty(qty, item.unitType)}</span>
+                              className="w-6 h-6 bg-surface-3 rounded-lg text-ink-3 text-sm font-bold disabled:opacity-30">−</button>
+                            <span className="text-ink font-bold text-sm w-10 text-center tabular-nums">{formatQty(qty, item.unitType)}</span>
                             <button onClick={() => setReturnQtys(q => ({ ...q, [i]: Math.min(maxReturnable, (q[i] ?? maxReturnable) + 1) }))}
                               disabled={!checked}
-                              className="w-6 h-6 bg-[#282a2b] rounded-lg text-[#8a9295] text-sm font-bold disabled:opacity-30">+</button>
+                              className="w-6 h-6 bg-surface-3 rounded-lg text-ink-3 text-sm font-bold disabled:opacity-30">+</button>
                           </div>
                         )}
-                        <span className="text-[#8a9295] text-xs font-mono w-20 text-right">
+                        <span className="text-ink-3 text-xs font-mono w-20 text-right">
                           {fullyReturned ? '—' : `$${Number(Number(item.subtotal) / Number(item.qty) * qty).toLocaleString('es-CO')}`}
                         </span>
                       </div>
@@ -507,20 +507,20 @@ export default function VentasCajero({ session }: Props) {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs text-[#8a9295] font-semibold uppercase tracking-wider mb-1.5">
-                      Motivo <span className="text-[#ffb4ab]">*</span>
+                    <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">
+                      Motivo <span className="text-danger">*</span>
                     </label>
                     <select value={returnReason} onChange={e => setReturnReason(e.target.value)}
-                      className="w-full bg-[#121212] border border-[#333] rounded-xl px-3 py-2.5 text-[#e1e2e4] text-sm focus:border-[#9acee1]">
+                      className="w-full bg-bg border border-line rounded-xl px-3 py-2.5 text-ink text-sm focus:border-primary">
                       {RETURN_REASONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs text-[#8a9295] font-semibold uppercase tracking-wider mb-1.5">
-                      Reembolso en <span className="text-[#ffb4ab]">*</span>
+                    <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">
+                      Reembolso en <span className="text-danger">*</span>
                     </label>
                     <select value={returnRefundMethod} onChange={e => setReturnRefundMethod(e.target.value)}
-                      className="w-full bg-[#121212] border border-[#333] rounded-xl px-3 py-2.5 text-[#e1e2e4] text-sm focus:border-[#9acee1]"
+                      className="w-full bg-bg border border-line rounded-xl px-3 py-2.5 text-ink text-sm focus:border-primary"
                       disabled={refundPaymentMethods.length === 0}>
                       {refundPaymentMethods.length === 0
                         ? <option value="">Cargando...</option>
@@ -531,15 +531,15 @@ export default function VentasCajero({ session }: Props) {
                 </div>
 
                 <div>
-                  <label className="block text-xs text-[#8a9295] font-semibold uppercase tracking-wider mb-1.5">
-                    Notas <span className="text-[#40484b]">(opcional)</span>
+                  <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">
+                    Notas <span className="text-ink-4">(opcional)</span>
                   </label>
                   <input type="text" value={returnNotes} onChange={e => setReturnNotes(e.target.value)}
                     placeholder="Detalle adicional..."
-                    className="w-full bg-[#121212] border border-[#333] rounded-xl px-4 py-2.5 text-[#e1e2e4] text-sm focus:border-[#9acee1] transition-colors" />
+                    className="w-full bg-bg border border-line rounded-xl px-4 py-2.5 text-ink text-sm focus:border-primary transition-colors" />
                 </div>
 
-                <div className="bg-[#5d4000]/20 border border-[#ffba27]/20 rounded-xl p-3 text-[#ffba27] text-xs">
+                <div className="bg-warn-soft/20 border border-warn/20 rounded-xl p-3 text-warn text-xs">
                   <span className="material-symbols-outlined text-[14px] align-middle mr-1">info</span>
                   {refundPaymentMethods.find(m => m.name === returnRefundMethod)?.type === 'cash'
                     ? 'Se restocará inventario y se registrará la salida de efectivo en la caja abierta.'
@@ -547,7 +547,7 @@ export default function VentasCajero({ session }: Props) {
                 </div>
 
                 {returnError && (
-                  <div className="bg-[#93000a]/30 border border-[#93000a] text-[#ffb4ab] px-3 py-2 rounded-xl text-sm">
+                  <div className="bg-danger-soft/30 border border-danger text-danger px-3 py-2 rounded-xl text-sm">
                     {returnError}
                   </div>
                 )}
@@ -596,12 +596,12 @@ export default function VentasCajero({ session }: Props) {
                       } finally { setReturnLoading(false); }
                     }}
                     disabled={returnLoading || returnSelected.size === 0}
-                    className="h-12 bg-[#5d4000]/60 hover:bg-[#5d4000] disabled:opacity-40 text-[#ffba27] font-bold rounded-xl transition-colors active:scale-[0.98] flex items-center justify-center gap-2">
+                    className="h-12 bg-warn-soft/60 hover:bg-warn-soft disabled:opacity-40 text-warn font-bold rounded-xl transition-colors active:scale-[0.98] flex items-center justify-center gap-2">
                     <span className="material-symbols-outlined text-[16px]">undo</span>
                     {returnLoading ? 'Procesando...' : 'Confirmar devolución'}
                   </button>
                   <button onClick={() => { setReturnSale(null); setReturnError(''); }}
-                    className="h-12 bg-[#1d2021] border border-[#333] text-[#c0c8cb] font-semibold rounded-xl hover:bg-[#282a2b] transition-colors">
+                    className="h-12 bg-surface-2 border border-line text-ink-2 font-semibold rounded-xl hover:bg-surface-3 transition-colors">
                     Cancelar
                   </button>
                 </div>
@@ -622,10 +622,10 @@ function EInvoiceBadge({ sale, onChanged }: { sale: Sale; onChanged: () => void 
   if (!status || status === 'not_requested') return null;
 
   const meta = {
-    pending:   { label: 'FE pendiente', icon: 'schedule',     cls: 'bg-[#5d4000]/40 text-[#ffba27]' },
-    emitted:   { label: 'FE emitida',   icon: 'verified',     cls: 'bg-[#12533a]/60 text-[#95d4b3]' },
-    failed:    { label: 'FE falló',     icon: 'error',        cls: 'bg-[#93000a]/30 text-[#ffb4ab]' },
-    cancelled: { label: 'FE anulada',   icon: 'block',        cls: 'bg-[#1d2021] text-[#8a9295]' },
+    pending:   { label: 'FE pendiente', icon: 'schedule',     cls: 'bg-warn-soft/40 text-warn' },
+    emitted:   { label: 'FE emitida',   icon: 'verified',     cls: 'bg-success-soft/60 text-success' },
+    failed:    { label: 'FE falló',     icon: 'error',        cls: 'bg-danger-soft/30 text-danger' },
+    cancelled: { label: 'FE anulada',   icon: 'block',        cls: 'bg-surface-2 text-ink-3' },
   }[status]!;
 
   // Suppress unused variable warning
