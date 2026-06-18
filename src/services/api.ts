@@ -213,7 +213,8 @@ export interface CashSession {
 
 export type CashMovementType =
   | 'sale' | 'expense' | 'salary' | 'inventory_purchase'
-  | 'withdrawal' | 'deposit' | 'adjustment' | 'advance';
+  | 'withdrawal' | 'deposit' | 'adjustment' | 'advance'
+  | 'fiado_payment' | 'reclassification';
 
 export interface CashMovement {
   id: string;
