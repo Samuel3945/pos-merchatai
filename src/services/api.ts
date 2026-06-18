@@ -284,6 +284,18 @@ export interface FiadoPayment {
   notes: string | null;
 }
 
+// Settled-fiado row for the history tab. Org-wide: a debt saldada at any
+// register/sede shows here. Wire shape produced by the backend
+// (getFiadosHistoryForPos) — snake_case on purpose.
+export interface FiadoHistoryItem {
+  id: string;
+  client_name: string;
+  client_phone: string | null;
+  total: number;
+  created_at: string;
+  settled_at: string;
+}
+
 export interface Customer {
   id: string;
   name: string;
@@ -378,6 +390,10 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ clientKey, method }),
       }),
+    // Org-wide settled-fiado history. Goes through req() so it hits the backend
+    // origin (BASE) with auth — a raw relative fetch would hit the device's own
+    // host and silently return nothing.
+    history: () => req<FiadoHistoryItem[]>('/pos/fiados/history'),
   },
 
   sales: {
