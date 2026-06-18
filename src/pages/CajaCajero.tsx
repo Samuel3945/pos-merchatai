@@ -11,6 +11,22 @@ import {
 
 const COP = (n: number) => '$' + Math.round(Number(n) || 0).toLocaleString('es-CO');
 
+// Revela el cuadre DESPUÉS de confirmar el conteo a ciegas: >0 sobra, <0 falta.
+function DiffBanner({ diff, zeroLabel }: { diff: number; zeroLabel: string }) {
+  const tone = diff === 0
+    ? 'bg-success-soft/30 border border-success/40 text-success'
+    : diff > 0
+      ? 'bg-primary-soft/30 border border-primary/40 text-primary'
+      : 'bg-danger-soft border border-danger text-danger';
+  const label = diff === 0 ? zeroLabel : diff > 0 ? 'Sobrante' : 'Faltante';
+  return (
+    <div className={`flex items-center justify-between rounded-xl px-4 py-2.5 text-sm font-bold ${tone}`}>
+      <span>{label}</span>
+      <span className="tabular-nums">{COP(Math.abs(diff))}</span>
+    </div>
+  );
+}
+
 const MOVEMENT_LABELS: Record<CashMovementType, string> = {
   sale:               'Venta',
   expense:            'Gasto',
@@ -36,20 +52,25 @@ export default function CajaCajero() {
   // Apertura
   const [showOpen, setShowOpen]     = useState(false);
   const [openAmount, setOpenAmount] = useState('');
-  const [openNotes, setOpenNotes]   = useState('');
   const [openBusy, setOpenBusy]     = useState(false);
   const [openExplanation, setOpenExplanation] = useState('');
   // Carry-over: lo que el cajón debe tener al abrir = último cierre contado. El
   // backend lo manda en /current cuando no hay sesión abierta (0 si no hay
-  // cierre previo). Si no cuadra, mostramos la diferencia; la explicación es
-  // opcional — el backend nunca bloquea la apertura (ADR-2).
+  // cierre previo). NO se lo mostramos al cajero (conteo a ciegas); solo lo
+  // usamos para revelar la diferencia DESPUÉS de que confirme.
   const [expectedOpening, setExpectedOpening] = useState(0);
+  // Conteo a ciegas: tras confirmar la apertura, revelamos aquí la diferencia
+  // (contado − esperado del carry-over). diff=null cuando no hay cierre previo.
+  const [openResult, setOpenResult] = useState<{ counted: number; diff: number | null } | null>(null);
 
   // Cierre
   const [showClose, setShowClose]     = useState(false);
   const [closeAmount, setCloseAmount] = useState('');
   const [closeNotes, setCloseNotes]   = useState('');
   const [closeBusy, setCloseBusy]     = useState(false);
+  // Conteo a ciegas: tras confirmar el cierre, revelamos aquí la diferencia
+  // (contado − esperado).
+  const [closeResult, setCloseResult] = useState<{ counted: number; diff: number } | null>(null);
 
   // Movimiento
   const [showMove, setShowMove]         = useState(false);
@@ -94,9 +115,12 @@ export default function CajaCajero() {
     // diferencia la explicación es opcional y el backend la guarda si se escribe.
     setOpenBusy(true); setError('');
     try {
-      await api.cash.open(amt, openNotes || undefined, openExplanation.trim() || undefined);
-      setShowOpen(false); setOpenAmount(''); setOpenNotes(''); setOpenExplanation('');
-      showOk('Caja abierta');
+      await api.cash.open(amt, undefined, openExplanation.trim() || undefined);
+      // Conteo a ciegas: capturamos la diferencia ANTES de load() (que resetea
+      // expectedOpening) y la revelamos recién ahora que el cajero ya confirmó.
+      const diff = expectedOpening > 0 ? amt - expectedOpening : null;
+      setOpenResult({ counted: amt, diff });
+      setOpenAmount(''); setOpenExplanation('');
       // El POS vive en otra pestaña y queda siempre montado: avisarle para que
       // re-evalúe la caja al instante y desbloquee la venta sin esperar el
       // refresco periódico ni un toque manual.
@@ -111,9 +135,11 @@ export default function CajaCajero() {
     if (isNaN(amt)) { setError('Ingresa el monto contado'); return; }
     setCloseBusy(true); setError('');
     try {
-      await api.cash.close(amt, closeNotes || undefined);
-      setShowClose(false); setCloseAmount(''); setCloseNotes('');
-      showOk('Caja cerrada');
+      await api.cash.close(amt, closeNotes.trim() || undefined);
+      // Conteo a ciegas: capturamos la diferencia ANTES de load() (que resetea
+      // expected) y la revelamos recién ahora que el cajero ya confirmó.
+      setCloseResult({ counted: amt, diff: amt - expected });
+      setCloseAmount(''); setCloseNotes('');
       window.dispatchEvent(new CustomEvent('pos:cash-changed'));
       load();
     } catch (e: any) { setError(e.message || 'Error al cerrar'); }
@@ -181,17 +207,9 @@ export default function CajaCajero() {
     .filter(m => m.type === 'sale')
     .reduce((acc, m) => acc + Number(m.amount), 0);
 
-  // Cuadre en vivo del cierre: contado − esperado. >0 sobra, <0 falta.
-  const countedNum = closeAmount.trim() !== '' ? (parseFloat(closeAmount) || 0) : null;
-  const closeDiff  = countedNum != null ? countedNum - expected : null;
-
-  // Cuadre de apertura vs lo que se cerró (carry-over). openDiff = null cuando
-  // no hay expectativa (primera apertura / sin cierre previo) o falta tipear.
-  const openCountedNum = openAmount.trim() !== '' ? (parseFloat(openAmount) || 0) : null;
-  const openDiff = expectedOpening > 0 && openCountedNum != null ? openCountedNum - expectedOpening : null;
-  // Hay diferencia → ofrecemos una explicación OPCIONAL (nunca obligatoria: el
-  // backend no bloquea la apertura, ADR-2).
-  const openHasDifference = expectedOpening > 0 && (openCountedNum ?? 0) !== expectedOpening;
+  // Conteo a ciegas: NO calculamos ni mostramos diferencias mientras el cajero
+  // tipea. La diferencia se revela solo después de confirmar (openResult /
+  // closeResult), para que no pueda ajustar el conteo hasta que "cuadre".
 
   return (
     <div className="h-full overflow-y-auto bg-bg">
@@ -235,20 +253,11 @@ export default function CajaCajero() {
               </div>
             </div>
           )}
-          {isOpen && (
-            <div className="mt-3 bg-success-soft/30 border border-success/40 rounded-xl p-3.5 flex items-center justify-between">
-              <div>
-                <div className="text-success text-[10px] uppercase tracking-wider font-bold mb-0.5">Efectivo esperado en caja</div>
-                <div className="text-ink-3 text-[11px]">Esto es lo que debe haber para entregar</div>
-              </div>
-              <div className="text-success font-black text-2xl tabular-nums">{COP(expected)}</div>
-            </div>
-          )}
         </div>
 
         {/* Actions */}
         {!isOpen ? (
-          <button onClick={() => setShowOpen(true)}
+          <button onClick={() => { setOpenResult(null); setError(''); setShowOpen(true); }}
             className="w-full h-14 bg-primary hover:bg-primary-ink text-white font-bold rounded-2xl flex items-center justify-center gap-2 text-base transition-colors active:scale-[0.98]">
             <span className="material-symbols-outlined">lock_open</span>
             Abrir caja
@@ -260,7 +269,7 @@ export default function CajaCajero() {
               <span className="material-symbols-outlined text-[18px]">swap_horiz</span>
               Movimiento
             </button>
-            <button onClick={() => setShowClose(true)}
+            <button onClick={() => { setCloseResult(null); setError(''); setShowClose(true); }}
               className="h-12 bg-surface border border-line-strong text-ink font-bold rounded-xl flex items-center justify-center gap-1.5 text-sm transition-colors hover:border-danger hover:text-danger active:scale-[0.98]">
               <span className="material-symbols-outlined text-[18px]">lock</span>
               Cerrar caja
@@ -292,134 +301,124 @@ export default function CajaCajero() {
         )}
       </div>
 
-      {/* ── Modal: abrir caja ── */}
+      {/* ── Modal: abrir caja (conteo a ciegas) ── */}
       {showOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
           <div className="bg-surface border border-line rounded-t-2xl sm:rounded-2xl w-full max-w-sm p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="font-bold text-ink text-lg">Abrir caja</h2>
-              <button onClick={() => { setShowOpen(false); setError(''); }} className="text-ink-3 hover:text-ink">
+              <button onClick={() => { setShowOpen(false); setOpenResult(null); setError(''); }} className="text-ink-3 hover:text-ink">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
-            {expectedOpening > 0 && (
-              <div className="bg-success-soft/20 border border-success/30 rounded-xl p-3.5 flex items-center justify-between">
-                <div>
-                  <div className="text-success text-[10px] uppercase tracking-wider font-bold mb-0.5">Deberías abrir con</div>
-                  <div className="text-ink-3 text-[11px]">Es lo que cerraste la última vez</div>
+
+            {openResult ? (
+              /* Revelado: el cajero ya confirmó, ahora sí le mostramos el cuadre. */
+              <>
+                <div className="bg-bg border border-line rounded-xl p-4 text-center space-y-1">
+                  <div className="text-ink-3 text-[10px] uppercase tracking-wider font-bold">Contaste</div>
+                  <div className="text-ink font-black text-2xl tabular-nums">{COP(openResult.counted)}</div>
                 </div>
-                <div className="text-success font-black text-xl tabular-nums">{COP(expectedOpening)}</div>
-              </div>
+                {openResult.diff == null ? (
+                  <div className="flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-bold bg-success-soft/30 border border-success/40 text-success">
+                    Caja abierta
+                  </div>
+                ) : (
+                  <DiffBanner diff={openResult.diff} zeroLabel="Coincide con el cierre" />
+                )}
+                <button onClick={() => { setShowOpen(false); setOpenResult(null); }}
+                  className="w-full h-11 bg-success-soft hover:bg-success-soft text-success font-bold rounded-xl transition-colors">
+                  Listo
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="bg-surface-2 border border-line rounded-xl p-3 flex items-start gap-2">
+                  <span className="material-symbols-outlined text-ink-3 text-[18px]">visibility_off</span>
+                  <div className="text-ink-3 text-xs">Contá el efectivo del cajón y escribí el total. Te decimos si cuadra después de confirmar.</div>
+                </div>
+                <div>
+                  <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">
+                    {expectedOpening > 0 ? 'Efectivo contado' : 'Efectivo inicial'}
+                  </label>
+                  <input type="number" value={openAmount} onChange={e => setOpenAmount(e.target.value)} placeholder="0" autoFocus
+                    className="w-full bg-bg border border-line rounded-xl px-4 py-2.5 text-ink text-sm focus:border-primary outline-none transition-colors" />
+                </div>
+                <div>
+                  <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">Notas (opcional)</label>
+                  <input type="text" value={openExplanation} onChange={e => setOpenExplanation(e.target.value)} placeholder="Si algo no cuadra, anotalo…"
+                    className="w-full bg-bg border border-line rounded-xl px-4 py-2.5 text-ink text-sm focus:border-primary outline-none transition-colors" />
+                </div>
+                {error && <div className="text-danger text-sm">{error}</div>}
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={handleOpen} disabled={openBusy}
+                    className="h-11 bg-success-soft hover:bg-success-soft disabled:opacity-40 text-success font-bold rounded-xl transition-colors">
+                    {openBusy ? 'Abriendo…' : 'Abrir caja'}
+                  </button>
+                  <button onClick={() => { setShowOpen(false); setError(''); }}
+                    className="h-11 bg-surface-2 border border-line text-ink-2 font-semibold rounded-xl hover:bg-surface-3 transition-colors">
+                    Cancelar
+                  </button>
+                </div>
+              </>
             )}
-            <div>
-              <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">
-                {expectedOpening > 0 ? 'Efectivo contado' : 'Efectivo inicial'}
-              </label>
-              <input type="number" value={openAmount} onChange={e => setOpenAmount(e.target.value)} placeholder="0" autoFocus
-                className="w-full bg-bg border border-line rounded-xl px-4 py-2.5 text-ink text-sm focus:border-primary outline-none transition-colors" />
-            </div>
-            {openDiff != null && (
-              <div className={`flex items-center justify-between rounded-xl px-4 py-2.5 text-sm font-bold ${
-                openDiff === 0
-                  ? 'bg-success-soft/30 border border-success/40 text-success'
-                  : openDiff > 0
-                    ? 'bg-primary-soft/30 border border-primary/40 text-primary'
-                    : 'bg-danger-soft border border-danger text-danger'
-              }`}>
-                <span>{openDiff === 0 ? 'Coincide con el cierre' : openDiff > 0 ? 'Sobrante' : 'Faltante'}</span>
-                <span className="tabular-nums">{COP(Math.abs(openDiff))}</span>
-              </div>
-            )}
-            {openHasDifference && (
-              <div>
-                <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">¿Qué pasó con la diferencia? (opcional)</label>
-                <input type="text" value={openExplanation} onChange={e => setOpenExplanation(e.target.value)} placeholder="Anota el faltante o sobrante si querés…"
-                  className="w-full bg-bg border border-line rounded-xl px-4 py-2.5 text-ink text-sm focus:border-primary outline-none transition-colors" />
-              </div>
-            )}
-            <div>
-              <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">Notas (opcional)</label>
-              <input type="text" value={openNotes} onChange={e => setOpenNotes(e.target.value)} placeholder="Observaciones…"
-                className="w-full bg-bg border border-line rounded-xl px-4 py-2.5 text-ink text-sm focus:border-primary outline-none transition-colors" />
-            </div>
-            {error && <div className="text-danger text-sm">{error}</div>}
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={handleOpen} disabled={openBusy}
-                className="h-11 bg-success-soft hover:bg-success-soft disabled:opacity-40 text-success font-bold rounded-xl transition-colors">
-                {openBusy ? 'Abriendo…' : 'Abrir caja'}
-              </button>
-              <button onClick={() => { setShowOpen(false); setError(''); }}
-                className="h-11 bg-surface-2 border border-line text-ink-2 font-semibold rounded-xl hover:bg-surface-3 transition-colors">
-                Cancelar
-              </button>
-            </div>
           </div>
         </div>
       )}
 
-      {/* ── Modal: cerrar caja ── */}
+      {/* ── Modal: cerrar caja (conteo a ciegas) ── */}
       {showClose && (
         <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
           <div className="bg-surface border border-line rounded-t-2xl sm:rounded-2xl w-full max-w-sm p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="font-bold text-ink text-lg">Cerrar caja</h2>
-              <button onClick={() => { setShowClose(false); setError(''); }} className="text-ink-3 hover:text-ink">
+              <button onClick={() => { setShowClose(false); setCloseResult(null); setError(''); }} className="text-ink-3 hover:text-ink">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
-            <div className="bg-bg border border-line rounded-xl p-4 space-y-3">
-              <div className="flex items-center justify-between gap-2">
+
+            {closeResult ? (
+              /* Revelado: el cajero ya confirmó, ahora sí le decimos si falta o sobra. */
+              <>
+                <div className="bg-bg border border-line rounded-xl p-4 text-center space-y-1">
+                  <div className="text-ink-3 text-[10px] uppercase tracking-wider font-bold">Contaste</div>
+                  <div className="text-ink font-black text-2xl tabular-nums">{COP(closeResult.counted)}</div>
+                </div>
+                <DiffBanner diff={closeResult.diff} zeroLabel="Caja cuadrada" />
+                <button onClick={() => { setShowClose(false); setCloseResult(null); }}
+                  className="w-full h-11 bg-success-soft hover:bg-success-soft text-success font-bold rounded-xl transition-colors">
+                  Listo
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="bg-surface-2 border border-line rounded-xl p-3 flex items-start gap-2">
+                  <span className="material-symbols-outlined text-ink-3 text-[18px]">visibility_off</span>
+                  <div className="text-ink-3 text-xs">Contá el efectivo del cajón y escribí el total. Te decimos si falta o sobra después de confirmar.</div>
+                </div>
                 <div>
-                  <div className="text-ink-3 text-[10px] uppercase tracking-wider">Apertura</div>
-                  <div className="text-ink font-bold tabular-nums">{COP(session?.opening_amount || 0)}</div>
+                  <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">Efectivo contado</label>
+                  <input type="number" value={closeAmount} onChange={e => setCloseAmount(e.target.value)} placeholder="0" autoFocus
+                    className="w-full bg-bg border border-line rounded-xl px-4 py-2.5 text-ink text-sm focus:border-primary outline-none transition-colors" />
                 </div>
-                <div className="text-center">
-                  <div className="text-ink-3 text-[10px] uppercase tracking-wider">Ventas efectivo</div>
-                  <div className="text-success font-bold tabular-nums">{COP(cashSales)}</div>
+                <div>
+                  <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">Notas (opcional)</label>
+                  <input type="text" value={closeNotes} onChange={e => setCloseNotes(e.target.value)} placeholder="Observaciones al cierre…"
+                    className="w-full bg-bg border border-line rounded-xl px-4 py-2.5 text-ink text-sm focus:border-primary outline-none transition-colors" />
                 </div>
-                <div className="text-right">
-                  <div className="text-ink-3 text-[10px] uppercase tracking-wider">Movimientos</div>
-                  <div className={`font-bold tabular-nums ${totalMov >= 0 ? 'text-success' : 'text-danger'}`}>{COP(totalMov)}</div>
+                {error && <div className="text-danger text-sm">{error}</div>}
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={handleClose} disabled={closeBusy}
+                    className="h-11 bg-danger-soft hover:bg-danger disabled:opacity-40 text-danger font-bold rounded-xl transition-colors">
+                    {closeBusy ? 'Cerrando…' : 'Cerrar caja'}
+                  </button>
+                  <button onClick={() => { setShowClose(false); setError(''); }}
+                    className="h-11 bg-surface-2 border border-line text-ink-2 font-semibold rounded-xl hover:bg-surface-3 transition-colors">
+                    Cancelar
+                  </button>
                 </div>
-              </div>
-              <div className="flex items-center justify-between border-t border-line pt-3">
-                <div className="text-success text-[11px] uppercase tracking-wider font-bold">Efectivo esperado</div>
-                <div className="text-success font-black text-lg tabular-nums">{COP(expected)}</div>
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">Efectivo contado</label>
-              <input type="number" value={closeAmount} onChange={e => setCloseAmount(e.target.value)} placeholder="0" autoFocus
-                className="w-full bg-bg border border-line rounded-xl px-4 py-2.5 text-ink text-sm focus:border-primary outline-none transition-colors" />
-            </div>
-            {closeDiff != null && (
-              <div className={`flex items-center justify-between rounded-xl px-4 py-2.5 text-sm font-bold ${
-                closeDiff === 0
-                  ? 'bg-success-soft/30 border border-success/40 text-success'
-                  : closeDiff > 0
-                    ? 'bg-primary-soft/30 border border-primary/40 text-primary'
-                    : 'bg-danger-soft border border-danger text-danger'
-              }`}>
-                <span>{closeDiff === 0 ? 'Caja cuadrada' : closeDiff > 0 ? 'Sobrante' : 'Faltante'}</span>
-                <span className="tabular-nums">{COP(Math.abs(closeDiff))}</span>
-              </div>
+              </>
             )}
-            <div>
-              <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">Notas (opcional)</label>
-              <input type="text" value={closeNotes} onChange={e => setCloseNotes(e.target.value)} placeholder="Observaciones al cierre…"
-                className="w-full bg-bg border border-line rounded-xl px-4 py-2.5 text-ink text-sm focus:border-primary outline-none transition-colors" />
-            </div>
-            {error && <div className="text-danger text-sm">{error}</div>}
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={handleClose} disabled={closeBusy}
-                className="h-11 bg-danger-soft hover:bg-danger disabled:opacity-40 text-danger font-bold rounded-xl transition-colors">
-                {closeBusy ? 'Cerrando…' : 'Cerrar caja'}
-              </button>
-              <button onClick={() => { setShowClose(false); setError(''); }}
-                className="h-11 bg-surface-2 border border-line text-ink-2 font-semibold rounded-xl hover:bg-surface-3 transition-colors">
-                Cancelar
-              </button>
-            </div>
           </div>
         </div>
       )}
