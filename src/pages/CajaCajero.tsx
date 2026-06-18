@@ -36,7 +36,16 @@ const MOVEMENT_LABELS: Record<CashMovementType, string> = {
   deposit:            'Depósito',
   adjustment:         'Ajuste',
   advance:            'Vale empleado',
+  fiado_payment:      'Cobro de fiado',
+  reclassification:   'Reclasificación',
 };
+
+// Cash inflows (added to the drawer). Everything else is an outflow. Mirrors the
+// backend direction map (MerchantAI features/cash/cash-ui.ts TYPE_META) so a
+// fiado payment shows as a positive entry here just like in the admin panel.
+const INFLOW_TYPES = new Set<CashMovementType>([
+  'sale', 'deposit', 'adjustment', 'fiado_payment', 'reclassification',
+]);
 
 export default function CajaCajero() {
   const [session, setSession]     = useState<CashSession | null>(null);
@@ -200,7 +209,7 @@ export default function CajaCajero() {
 
   const totalMov = movements
     .filter(m => m.type !== 'sale')
-    .reduce((acc, m) => m.type === 'deposit' || m.type === 'adjustment' ? acc + Number(m.amount) : acc - Number(m.amount), 0);
+    .reduce((acc, m) => INFLOW_TYPES.has(m.type) ? acc + Number(m.amount) : acc - Number(m.amount), 0);
 
   // Ventas en efectivo del turno (las que ya están contadas dentro de `expected`).
   const cashSales = movements
@@ -291,10 +300,9 @@ export default function CajaCajero() {
                     <div className="text-ink-3 text-xs truncate max-w-[200px]">{m.reason}</div>
                   </div>
                   <div className={`font-bold tabular-nums text-sm shrink-0 ${
-                    m.type === 'sale' || m.type === 'deposit' || m.type === 'adjustment'
-                      ? 'text-success' : 'text-danger'
+                    INFLOW_TYPES.has(m.type) ? 'text-success' : 'text-danger'
                   }`}>
-                    {m.type === 'sale' || m.type === 'deposit' || m.type === 'adjustment' ? '+' : '-'}{COP(m.amount)}
+                    {INFLOW_TYPES.has(m.type) ? '+' : '-'}{COP(m.amount)}
                   </div>
                 </div>
               ))}
