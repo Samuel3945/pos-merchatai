@@ -140,16 +140,6 @@ export default function FiadosCajero() {
     }
   };
 
-  const openWhatsApp = (c: FiadoClient) => {
-    if (!c.client_phone) return;
-    const phone = c.client_phone.replace(/\D/g, '');
-    const num = phone.startsWith('57') ? phone : `57${phone}`;
-    const msg = encodeURIComponent(
-      `Hola ${c.client_name.split(' ')[0]}, te recuerdo que tienes un saldo pendiente de ${COP(c.total_owed)} en la tienda. ¡Gracias! 🙏`
-    );
-    window.open(`https://wa.me/${num}?text=${msg}`, '_blank');
-  };
-
   const filtered = clients.filter(c =>
     !search || c.client_name.toLowerCase().includes(search.toLowerCase()) ||
     (c.client_phone || '').includes(search)
@@ -284,12 +274,6 @@ export default function FiadosCajero() {
                     <span className="material-symbols-outlined text-[14px]">check_circle</span>
                     Saldar
                   </button>
-                  {c.client_phone && (
-                    <button onClick={() => openWhatsApp(c)}
-                      className="h-9 w-9 flex items-center justify-center bg-[#075E54]/30 hover:bg-[#075E54]/60 border border-[#25D366]/30 text-[#25D366] rounded-lg transition-colors">
-                      <span className="material-symbols-outlined text-[18px]">chat</span>
-                    </button>
-                  )}
                 </div>
               </div>
             ))}
