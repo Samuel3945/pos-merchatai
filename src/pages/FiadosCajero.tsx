@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { api, FiadoClient, PaymentMethod } from '../services/api';
+import { api, FiadoClient, FiadoHistoryItem, PaymentMethod } from '../services/api';
 
 const COP = (n: number) => '$' + Math.round(Number(n) || 0).toLocaleString('es-CO');
 
@@ -31,15 +31,6 @@ function isAvailableNow(pm: PaymentMethod): boolean {
   return true;
 }
 
-interface HistoryItem {
-  id: string;
-  client_name: string;
-  client_phone: string | null;
-  total: number;
-  created_at: string;
-  settled_at: string;
-}
-
 export default function FiadosCajero() {
   const [clients, setClients]         = useState<FiadoClient[]>([]);
   const [stats, setStats]             = useState<Record<string, number>>({});
@@ -49,7 +40,7 @@ export default function FiadosCajero() {
   const [success, setSuccess]         = useState('');
   const [paymentOptions, setPaymentOptions] = useState<PaymentMethod[]>([DEFAULT_METHOD]);
   const [activeTab, setActiveTab]     = useState<'pendientes' | 'historial'>('pendientes');
-  const [history, setHistory]         = useState<HistoryItem[]>([]);
+  const [history, setHistory]         = useState<FiadoHistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
   // Modal pago / saldar
@@ -87,10 +78,8 @@ export default function FiadosCajero() {
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
     try {
-      const jwt = (() => { try { const s = JSON.parse(localStorage.getItem('pos_web_session_v1') || '{}'); return s.jwt; } catch { return null; } })();
-      const res = await fetch('/api/pos/fiados/history', { headers: jwt ? { Authorization: `Bearer ${jwt}` } : {} });
-      if (res.ok) setHistory(await res.json());
-    } catch {}
+      setHistory(await api.fiados.history());
+    } catch { setHistory([]); }
     finally { setHistoryLoading(false); }
   }, []);
 
