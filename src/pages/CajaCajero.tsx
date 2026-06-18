@@ -238,18 +238,20 @@ export default function CajaCajero() {
           </div>
 
           {isOpen && (
+            // Montos con blur permanente: estos tres sumados delatan el esperado,
+            // así que se ven los rubros pero no los números (conteo a ciegas).
             <div className="mt-4 grid grid-cols-3 gap-2">
               <div className="bg-bg border border-line rounded-xl p-3">
                 <div className="text-ink-3 text-[10px] uppercase tracking-wider mb-0.5">Apertura</div>
-                <div className="text-ink font-bold tabular-nums">{COP(session?.opening_amount || 0)}</div>
+                <div className="text-ink font-bold tabular-nums blur-sm select-none">{COP(session?.opening_amount || 0)}</div>
               </div>
               <div className="bg-bg border border-line rounded-xl p-3">
                 <div className="text-ink-3 text-[10px] uppercase tracking-wider mb-0.5">Ventas efectivo</div>
-                <div className="text-success font-bold tabular-nums">{COP(cashSales)}</div>
+                <div className="text-success font-bold tabular-nums blur-sm select-none">{COP(cashSales)}</div>
               </div>
               <div className="bg-bg border border-line rounded-xl p-3">
                 <div className="text-ink-3 text-[10px] uppercase tracking-wider mb-0.5">Movimientos</div>
-                <div className={`font-bold tabular-nums ${totalMov >= 0 ? 'text-success' : 'text-danger'}`}>{COP(totalMov)}</div>
+                <div className={`font-bold tabular-nums blur-sm select-none ${totalMov >= 0 ? 'text-success' : 'text-danger'}`}>{COP(totalMov)}</div>
               </div>
             </div>
           )}
