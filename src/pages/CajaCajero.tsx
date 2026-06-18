@@ -41,7 +41,8 @@ export default function CajaCajero() {
   const [openExplanation, setOpenExplanation] = useState('');
   // Carry-over: lo que el cajón debe tener al abrir = último cierre contado. El
   // backend lo manda en /current cuando no hay sesión abierta (0 si no hay
-  // cierre previo). Si el conteo de apertura no cuadra, se exige explicación.
+  // cierre previo). Si no cuadra, mostramos la diferencia; la explicación es
+  // opcional — el backend nunca bloquea la apertura (ADR-2).
   const [expectedOpening, setExpectedOpening] = useState(0);
 
   // Cierre
@@ -89,12 +90,8 @@ export default function CajaCajero() {
 
   const handleOpen = async () => {
     const amt = parseFloat(openAmount) || 0;
-    // Carry-over: si el cajón debía tener un saldo y el conteo no cuadra, el
-    // cajero debe explicar la diferencia (mismo gate que enforce el backend).
-    const needsExplanation = expectedOpening > 0 && amt !== expectedOpening;
-    if (needsExplanation && !openExplanation.trim()) {
-      setError('Explica la diferencia con lo que cerraste'); return;
-    }
+    // Abrir NUNCA se bloquea: el backend barre el faltante solo (ADR-2). Si hay
+    // diferencia la explicación es opcional y el backend la guarda si se escribe.
     setOpenBusy(true); setError('');
     try {
       await api.cash.open(amt, openNotes || undefined, openExplanation.trim() || undefined);
@@ -192,7 +189,9 @@ export default function CajaCajero() {
   // no hay expectativa (primera apertura / sin cierre previo) o falta tipear.
   const openCountedNum = openAmount.trim() !== '' ? (parseFloat(openAmount) || 0) : null;
   const openDiff = expectedOpening > 0 && openCountedNum != null ? openCountedNum - expectedOpening : null;
-  const openNeedsExplanation = expectedOpening > 0 && (openCountedNum ?? 0) !== expectedOpening;
+  // Hay diferencia → ofrecemos una explicación OPCIONAL (nunca obligatoria: el
+  // backend no bloquea la apertura, ADR-2).
+  const openHasDifference = expectedOpening > 0 && (openCountedNum ?? 0) !== expectedOpening;
 
   return (
     <div className="h-full overflow-y-auto bg-bg">
@@ -331,11 +330,11 @@ export default function CajaCajero() {
                 <span className="tabular-nums">{COP(Math.abs(openDiff))}</span>
               </div>
             )}
-            {openNeedsExplanation && (
+            {openHasDifference && (
               <div>
-                <label className="block text-xs text-danger font-semibold uppercase tracking-wider mb-1.5">¿Qué pasó con la diferencia?</label>
-                <input type="text" value={openExplanation} onChange={e => setOpenExplanation(e.target.value)} placeholder="Explica el faltante o sobrante…"
-                  className="w-full bg-bg border border-danger rounded-xl px-4 py-2.5 text-ink text-sm focus:border-danger outline-none transition-colors" />
+                <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">¿Qué pasó con la diferencia? (opcional)</label>
+                <input type="text" value={openExplanation} onChange={e => setOpenExplanation(e.target.value)} placeholder="Anota el faltante o sobrante si querés…"
+                  className="w-full bg-bg border border-line rounded-xl px-4 py-2.5 text-ink text-sm focus:border-primary outline-none transition-colors" />
               </div>
             )}
             <div>
@@ -345,7 +344,7 @@ export default function CajaCajero() {
             </div>
             {error && <div className="text-danger text-sm">{error}</div>}
             <div className="grid grid-cols-2 gap-2">
-              <button onClick={handleOpen} disabled={openBusy || (openNeedsExplanation && !openExplanation.trim())}
+              <button onClick={handleOpen} disabled={openBusy}
                 className="h-11 bg-success-soft hover:bg-success-soft disabled:opacity-40 text-success font-bold rounded-xl transition-colors">
                 {openBusy ? 'Abriendo…' : 'Abrir caja'}
               </button>
