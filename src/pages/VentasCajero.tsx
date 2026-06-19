@@ -35,6 +35,17 @@ function parseFiadoNotes(notes: string | null) {
   return notes.split(' | ').map(p => p.trim()).filter(Boolean);
 }
 
+// A sale can only be corrected ("error de carga") within the current shift.
+// The backend enforces the exact open-session boundary; here we use "today in
+// Bogotá" as a cheap proxy so the action only shows on plausibly-correctable
+// sales (the session has no opened-at on the client).
+function isToday(iso: string) {
+  if (!iso) return false;
+  const saleDay = new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+  return saleDay === today;
+}
+
 function formatQty(qty: number | string, unitType?: 'unit' | 'kg') {
   const n = Number(qty);
   if (!Number.isFinite(n)) return String(qty);
@@ -95,6 +106,15 @@ export default function VentasCajero({ session }: Props) {
   const [returnRefundMethod, setReturnRefundMethod] = useState<string>('');
   const [returnError, setReturnError] = useState<string>('');
   const [refundPaymentMethods, setRefundPaymentMethods] = useState<PaymentMethod[]>([]);
+  // Correction ("error de carga") modal
+  const [correctSale, setCorrectSale] = useState<Sale | null>(null);
+  const [correctFromId, setCorrectFromId] = useState('');
+  const [correctToMethod, setCorrectToMethod] = useState('');
+  const [correctAmount, setCorrectAmount] = useState('');
+  const [correctMethods, setCorrectMethods] = useState<PaymentMethod[]>([]);
+  const [correctLoading, setCorrectLoading] = useState(false);
+  const [correctError, setCorrectError] = useState('');
+  const [correctSuccess, setCorrectSuccess] = useState('');
 
   useEffect(() => {
     api.pos.paymentMethods().then(methods => {
@@ -149,6 +169,42 @@ export default function VentasCajero({ session }: Props) {
     setPaymentFilter('');
     setRange(defaultRange());
     setPage(0);
+  };
+
+  const openCorrection = (sale: Sale) => {
+    const pays = sale.payments ?? [];
+    const first = pays[0];
+    setCorrectSale(sale);
+    setCorrectError('');
+    setCorrectSuccess('');
+    setCorrectFromId(first?.id ?? '');
+    setCorrectAmount(first ? String(first.amount) : '');
+    setCorrectToMethod('');
+    const systemCash: PaymentMethod = {
+      id: 'system-cash', name: 'Efectivo', type: 'cash',
+      icon: 'payments', active: true, sort_order: 0, details: null, description: null,
+    };
+    api.pos.paymentMethods().then(methods => {
+      const rest = (Array.isArray(methods) ? methods : [])
+        .filter(m => m.active && m.type !== 'fiado' && m.type !== 'cash');
+      setCorrectMethods([systemCash, ...rest]);
+    }).catch(() => setCorrectMethods([systemCash]));
+  };
+
+  const submitCorrection = async () => {
+    if (!correctSale || !correctFromId || !correctToMethod) return;
+    setCorrectLoading(true);
+    setCorrectError('');
+    try {
+      await api.sales.reclassify(correctFromId, correctToMethod, Number(correctAmount));
+      setCorrectSuccess('ok');
+      load(search, dateStart, dateEnd, page);
+      setTimeout(() => { setCorrectSale(null); setCorrectSuccess(''); }, 1500);
+    } catch (e: any) {
+      setCorrectError(e?.message || 'No se pudo corregir el pago');
+    } finally {
+      setCorrectLoading(false);
+    }
   };
 
   const hasFilters = !!(search || paymentFilter);
@@ -339,6 +395,24 @@ export default function VentasCajero({ session }: Props) {
                                 </div>
                               ))}
                             </div>
+                            {(sale.payments?.length ?? 0) > 0 && (
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-ink-3 text-xs">Pagos:</span>
+                                {(sale.payments ?? []).map((p, i) => (
+                                  <span key={i} className="text-xs text-ink-2 bg-surface-2 px-2 py-0.5 rounded-lg">
+                                    {p.method} ${Number(p.amount).toLocaleString('es-CO')}
+                                  </span>
+                                ))}
+                                {isToday(sale.createdAt) && sale.status !== 'returned' && (
+                                  <button
+                                    onClick={e => { e.stopPropagation(); openCorrection(sale); }}
+                                    className="ml-auto flex items-center gap-1 text-[10px] font-semibold text-primary bg-primary-soft/40 hover:bg-primary-soft/70 px-2 py-1 rounded-lg transition-colors">
+                                    <span className="material-symbols-outlined text-[12px]">edit</span>
+                                    Corregir carga
+                                  </button>
+                                )}
+                              </div>
+                            )}
                             <div className="flex justify-between border-t border-line pt-2 mt-1 items-center">
                               <span className="text-ink-3 text-xs">Total</span>
                               <div className="flex items-center gap-3">
@@ -610,6 +684,111 @@ export default function VentasCajero({ session }: Props) {
           </div>
         </div>
       )}
+
+      {/* ── Correction ("error de carga") modal ── */}
+      {correctSale && (() => {
+        const pays = correctSale.payments ?? [];
+        const fromPayment = pays.find(p => p.id === correctFromId);
+        const fromAmt = fromPayment ? Number(fromPayment.amount) : 0;
+        const amtNum = Number(correctAmount);
+        const targetOptions = correctMethods.filter(m => m.name !== fromPayment?.method);
+        const canSubmit = !!correctFromId && !!correctToMethod
+          && amtNum > 0 && amtNum <= fromAmt && !correctLoading;
+        return (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+            <div className="bg-surface border border-line rounded-2xl w-full max-w-sm p-6 space-y-4 shadow-2xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="font-bold text-ink">Corregir error de carga</h2>
+                  <p className="text-ink-3 text-xs mt-0.5">
+                    Venta #{correctSale.id.slice(0, 6).toUpperCase()} · ${Number(correctSale.total).toLocaleString('es-CO')}
+                  </p>
+                </div>
+                <button onClick={() => setCorrectSale(null)} className="text-ink-3 hover:text-ink">
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+
+              {correctSuccess ? (
+                <div className="text-center py-4">
+                  <span className="material-symbols-outlined text-success text-4xl block mb-2">check_circle</span>
+                  <p className="text-success font-semibold">Pago corregido</p>
+                  <p className="text-ink-3 text-xs mt-1">La caja se ajustó con la diferencia.</p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-ink-3 text-xs">
+                    Mové un monto de un método a otro (ej: una parte era efectivo, no
+                    transferencia). El total de la venta no cambia.
+                  </p>
+                  <div>
+                    <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">
+                      De (lo que se cargó)
+                    </label>
+                    <select
+                      value={correctFromId}
+                      onChange={e => {
+                        setCorrectFromId(e.target.value);
+                        const p = pays.find(x => x.id === e.target.value);
+                        setCorrectAmount(p ? String(p.amount) : '');
+                        setCorrectToMethod('');
+                      }}
+                      className="w-full bg-bg border border-line rounded-xl px-3 py-2.5 text-ink text-sm focus:border-primary">
+                      {pays.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.method} · ${Number(p.amount).toLocaleString('es-CO')}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">
+                      A (lo que era de verdad)
+                    </label>
+                    <select value={correctToMethod} onChange={e => setCorrectToMethod(e.target.value)}
+                      className="w-full bg-bg border border-line rounded-xl px-3 py-2.5 text-ink text-sm focus:border-primary">
+                      <option value="">Elegí un método</option>
+                      {targetOptions.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">
+                      Monto a mover
+                    </label>
+                    <input
+                      type="number" inputMode="decimal" min="0" max={fromAmt}
+                      value={correctAmount} onChange={e => setCorrectAmount(e.target.value)}
+                      className="w-full bg-bg border border-line rounded-xl px-4 py-2.5 text-ink text-sm focus:border-primary" />
+                    {amtNum > fromAmt && (
+                      <p className="text-danger text-xs mt-1">
+                        No podés mover más de ${fromAmt.toLocaleString('es-CO')}.
+                      </p>
+                    )}
+                  </div>
+
+                  {correctError && (
+                    <div className="bg-danger-soft/30 border border-danger text-danger px-3 py-2 rounded-xl text-sm">
+                      {correctError}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={submitCorrection} disabled={!canSubmit}
+                      className="h-12 bg-primary-soft/60 hover:bg-primary-soft disabled:opacity-40 text-primary font-bold rounded-xl transition-colors active:scale-[0.98] flex items-center justify-center gap-2">
+                      <span className="material-symbols-outlined text-[16px]">edit</span>
+                      {correctLoading ? 'Corrigiendo...' : 'Confirmar'}
+                    </button>
+                    <button onClick={() => setCorrectSale(null)}
+                      className="h-12 bg-surface-2 border border-line text-ink-2 font-semibold rounded-xl hover:bg-surface-3 transition-colors">
+                      Cancelar
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

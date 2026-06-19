@@ -422,6 +422,18 @@ export const api = {
         `/pos/sales/${saleId}/return`,
         { method: 'POST', body: JSON.stringify(payload) },
       ),
+    // "Error de carga": move an amount of a sale's payment from one method to
+    // another (e.g. a mixed cash/transfer split entered wrong). Only valid for a
+    // sale of the current shift — the backend rejects anything older.
+    reclassify: (salePaymentId: string, toMethod: string, amount: number) =>
+      req<{ ok: boolean }>('/pos/sales/reclassify', {
+        method: 'POST',
+        body: JSON.stringify({
+          sale_payment_id: salePaymentId,
+          to_method: toMethod,
+          amount,
+        }),
+      }),
   },
 
   customers: {
