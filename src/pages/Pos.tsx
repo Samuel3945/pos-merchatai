@@ -65,9 +65,19 @@ function Keypad({ onKey }: { onKey: (k: string) => void }) {
 function KgModal({
   product, onConfirm, onCancel,
 }: { product: Product; onConfirm: (qty: number) => void; onCancel: () => void }) {
+  // 'weight': cashier types kg → shows the price. 'amount': cashier types the
+  // money to charge → shows the equivalent weight (e.g. "$5.000 de queso").
+  const [mode, setMode] = useState<'weight' | 'amount'>('weight');
   const [val, setVal] = useState('');
-  const kg = parseFloat(val || '0') || 0;
-  const subtotal = kg * Number(product.price);
+  const price = Number(product.price);
+  const num = parseFloat(val || '0') || 0;
+
+  // In amount mode the weight is derived from the money: kg = amount / price.
+  // Weight is quantized to grams (3 decimals), so the resulting charge can
+  // differ from the typed amount by a few pesos — we surface that real charge.
+  const rawKg = mode === 'amount' ? (price > 0 ? num / price : 0) : num;
+  const kg = parseFloat(rawKg.toFixed(3));
+  const charge = kg * price;
 
   useEffect(() => {
     const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
@@ -75,17 +85,21 @@ function KgModal({
     return () => window.removeEventListener('keydown', onEsc);
   }, [onCancel]);
 
+  const switchMode = (m: 'weight' | 'amount') => { setMode(m); setVal(''); };
+
   const onKey = (k: string) => {
+    const maxLen = mode === 'amount' ? 7 : 6;
     setVal(v => {
       if (k === 'del') return v.slice(0, -1);
-      if (k === '.') return v.includes('.') ? v : (v === '' ? '0.' : v + '.');
+      // Pesos are whole numbers — no decimal point in amount mode.
+      if (k === '.') return mode === 'amount' ? v : (v.includes('.') ? v : (v === '' ? '0.' : v + '.'));
       if (v === '0') return k;
-      if (v.replace('.', '').length >= 6) return v;
+      if (v.replace('.', '').length >= maxLen) return v;
       return v + k;
     });
   };
 
-  const quick = ['0.25', '0.5', '1', '2'];
+  const quick = mode === 'amount' ? ['1000', '2000', '5000', '10000'] : ['0.25', '0.5', '1', '2'];
 
   return (
     <div className="fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onCancel}>
@@ -97,7 +111,7 @@ function KgModal({
             </span>
             <div className="min-w-0">
               <div className="text-[17px] font-semibold truncate">{product.name}</div>
-              <div className="text-[13px] text-ink-3">{cop(Number(product.price))} / kg · {Number(product.stock)} kg disp.</div>
+              <div className="text-[13px] text-ink-3">{cop(price)} / kg · {Number(product.stock)} kg disp.</div>
             </div>
           </div>
           <button onClick={onCancel} className="w-9 h-9 grid place-items-center rounded-lg bg-surface-2 text-ink-2 hover:text-ink shrink-0">
@@ -105,20 +119,47 @@ function KgModal({
           </button>
         </div>
 
-        <div className="mt-4 p-4 rounded-2xl bg-surface-2 text-center">
-          <div className="text-[10.5px] font-bold uppercase tracking-[0.09em] text-ink-3">Peso a agregar</div>
-          <div className="font-display font-semibold leading-none tracking-tight mt-1.5">
-            <span className="text-[52px] tnum">{val === '' ? '0' : val}</span>
-            <span className="text-[22px] text-ink-3 ml-1.5">kg</span>
-          </div>
-          <div className="text-[18px] font-bold text-primary mt-2 tnum">{cop(subtotal)}</div>
+        {/* Mode toggle: type the weight, or type the money to charge. */}
+        <div className="grid grid-cols-2 gap-2 mt-4 p-1 rounded-xl bg-surface-2 border border-line">
+          {([['weight', 'Por peso'], ['amount', 'Por monto']] as const).map(([m, label]) => (
+            <button key={m} onClick={() => switchMode(m)}
+              className={`h-9 rounded-lg text-[13px] font-semibold transition-colors ${
+                mode === m ? 'bg-primary text-white' : 'text-ink-2 hover:text-ink'
+              }`}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-3 p-4 rounded-2xl bg-surface-2 text-center">
+          {mode === 'weight' ? (
+            <>
+              <div className="text-[10.5px] font-bold uppercase tracking-[0.09em] text-ink-3">Peso a agregar</div>
+              <div className="font-display font-semibold leading-none tracking-tight mt-1.5">
+                <span className="text-[52px] tnum">{val === '' ? '0' : val}</span>
+                <span className="text-[22px] text-ink-3 ml-1.5">kg</span>
+              </div>
+              <div className="text-[18px] font-bold text-primary mt-2 tnum">{cop(charge)}</div>
+            </>
+          ) : (
+            <>
+              <div className="text-[10.5px] font-bold uppercase tracking-[0.09em] text-ink-3">Monto a cobrar</div>
+              <div className="font-display font-semibold leading-none tracking-tight mt-1.5 text-primary">
+                <span className="text-[52px] tnum">{cop(num)}</span>
+              </div>
+              <div className="text-[18px] font-bold mt-2 tnum">≈ {kg} kg</div>
+              {kg > 0 && charge !== num && (
+                <div className="text-[12px] text-ink-3 mt-1 tnum">Cobra {cop(charge)}</div>
+              )}
+            </>
+          )}
         </div>
 
         <div className="flex gap-2 mt-3">
           {quick.map(q => (
             <button key={q} onClick={() => setVal(q)}
               className="flex-1 h-10 rounded-xl border border-line bg-surface text-ink-2 text-[13px] font-semibold transition-colors hover:border-primary hover:text-primary">
-              {q}kg
+              {mode === 'amount' ? cop(Number(q)) : `${q}kg`}
             </button>
           ))}
         </div>
@@ -128,7 +169,7 @@ function KgModal({
         <button onClick={() => kg > 0 && onConfirm(kg)} disabled={kg <= 0}
           className="w-full h-14 mt-4 rounded-2xl bg-primary hover:bg-primary-ink disabled:opacity-45 disabled:cursor-not-allowed text-white font-bold text-base flex items-center justify-center gap-2 transition-colors">
           <span className="material-symbols-outlined">add</span>
-          Agregar {kg > 0 ? `· ${cop(subtotal)}` : ''}
+          Agregar {kg > 0 ? `· ${kg} kg · ${cop(charge)}` : ''}
         </button>
       </div>
     </div>
