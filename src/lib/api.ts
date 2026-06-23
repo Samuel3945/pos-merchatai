@@ -130,6 +130,10 @@ export interface LoginResponse {
   success:    true;
   jwt:        string;
   expiresInS: number;
+  // El server sube el epoch de la caja en cada login y lo devuelve aquí. El
+  // cliente lo siembra en services/api.ts (knownEpoch) para no mandar un epoch
+  // viejo en la primera llamada y comerse un 401 session_revoked.
+  sessionEpoch?: number;
   cash:       CashSummary;
 }
 
