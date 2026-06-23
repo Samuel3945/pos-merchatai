@@ -3,7 +3,7 @@ import { api, ApiError } from '../lib/api';
 import QrScanner from '../components/QrScanner';
 
 interface Props {
-  onLoggedIn: (data: { jwt: string; expiresAt: number; cash: any }) => void;
+  onLoggedIn: (data: { jwt: string; expiresAt: number; cash: any; sessionEpoch?: number }) => void;
 }
 
 // The access QR encodes a deep link like https://pos.../?code=TOKEN. Accept
@@ -63,7 +63,7 @@ export default function Login({ onLoggedIn }: Props) {
     try {
       const r = await api.login(accessCode, navigator.userAgent.slice(0, 80));
       const expiresAt = Math.floor(Date.now() / 1000) + r.expiresInS;
-      onLoggedIn({ jwt: r.jwt, expiresAt, cash: r.cash });
+      onLoggedIn({ jwt: r.jwt, expiresAt, cash: r.cash, sessionEpoch: r.sessionEpoch });
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'No se pudo conectar');
     } finally {

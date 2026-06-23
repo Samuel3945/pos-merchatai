@@ -58,6 +58,15 @@ export function setActiveCashier(c: ActiveCashier | null): void {
 // el viejo, /pos/me responde `cashierLocked: true` (lo maneja Pos.tsx).
 let knownEpoch: number | null = null;
 
+// El login (lib/api.ts, otro módulo) sube el epoch en el server pero no toca
+// este valor en memoria. Sin sembrarlo, tras re-loguear seguimos mandando el
+// epoch viejo y el server responde 401 session_revoked en la primera llamada
+// (p. ej. /pos/cashiers) → rebote al login. Por eso App.tsx siembra el epoch
+// devuelto por el login y lo resetea al cerrar sesión.
+export function setSessionEpoch(epoch: number | null): void {
+  knownEpoch = epoch;
+}
+
 async function req<T>(path: string, options?: RequestInit): Promise<T> {
   const token = readToken();
   const headers: Record<string, string> = {

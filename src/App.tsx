@@ -7,7 +7,7 @@ import FiadosCajero from './pages/FiadosCajero';
 import VentasCajero from './pages/VentasCajero';
 import ClientesCajero from './pages/ClientesCajero';
 import { loadSession, saveSession, clearSession, type PosSession } from './lib/storage';
-import { getActiveCashier, setActiveCashier } from './services/api';
+import { getActiveCashier, setActiveCashier, setSessionEpoch } from './services/api';
 
 type Tab = 'pos' | 'caja' | 'fiados' | 'ventas' | 'clientes';
 type Theme = 'dark' | 'light';
@@ -61,6 +61,9 @@ export default function App() {
     const handleExpired = () => {
       clearSession();
       setActiveCashier(null);
+      // Drop the in-memory epoch so the next login starts clean — otherwise the
+      // stale value would 401 the first call after re-login (session_revoked).
+      setSessionEpoch(null);
       setScreen({ kind: 'login' });
       setTab('pos');
     };
@@ -83,10 +86,14 @@ export default function App() {
     };
   }, []);
 
-  function onLoggedIn(data: { jwt: string; expiresAt: number; cash: PosSession['cash'] }) {
+  function onLoggedIn(data: { jwt: string; expiresAt: number; cash: PosSession['cash']; sessionEpoch?: number }) {
     const s: PosSession = { jwt: data.jwt, expiresAt: data.expiresAt, cash: data.cash };
     saveSession(s);
     setActiveCashier(null);
+    // Seed the epoch the server just bumped at login, so every subsequent
+    // request carries the current value (not a stale one left in module memory
+    // from a previous session) and passes the single-active-device check.
+    setSessionEpoch(data.sessionEpoch ?? null);
     // Tras pegar el token (caja) → elegir empleado antes de entrar.
     setScreen({ kind: 'selectCashier', session: s });
     setTab('pos');
@@ -106,6 +113,7 @@ export default function App() {
   function onLogout() {
     clearSession();
     setActiveCashier(null);
+    setSessionEpoch(null);
     setScreen({ kind: 'login' });
   }
 
