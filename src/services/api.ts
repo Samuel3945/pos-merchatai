@@ -177,7 +177,7 @@ export interface Sale {
   einvoiceNumber?: string | null;
 }
 
-export type PaymentMethodType = 'cash' | 'transfer' | 'nequi' | 'llave' | 'fiado';
+export type PaymentMethodType = 'cash' | 'transfer' | 'nequi' | 'llave' | 'credito';
 
 export interface PaymentMethodDetails {
   bank?: string;
@@ -223,7 +223,7 @@ export interface CashSession {
 export type CashMovementType =
   | 'sale' | 'expense' | 'salary' | 'inventory_purchase'
   | 'withdrawal' | 'deposit' | 'adjustment' | 'advance'
-  | 'fiado_payment' | 'reclassification';
+  | 'credito_payment' | 'reclassification';
 
 export interface CashMovement {
   id: string;
@@ -261,8 +261,8 @@ export interface MeResponse {
     cashierId:    string | null;
     locationId:   string | null;
   };
-  store: { id: string; name: string; phone: string; type: string; offering: string; fiadoTermDays?: number };
-  features: { fiadoEnabled: boolean; sellByWeight: boolean; sellDigital: boolean; wholesale: boolean; canConfirmTransfers: boolean; allowOversell?: boolean };
+  store: { id: string; name: string; phone: string; type: string; offering: string; creditoTermDays?: number };
+  features: { creditoEnabled: boolean; sellByWeight: boolean; sellDigital: boolean; wholesale: boolean; canConfirmTransfers: boolean; allowOversell?: boolean };
   paymentMethods: PaymentMethod[];
   cashiers:       CashierLite[];
   products:       Product[];
@@ -271,9 +271,9 @@ export interface MeResponse {
   serverTime:     string;
 }
 
-// ── Tipos adicionales para Caja, Fiados, Ventas, Clientes ────────────────────
+// ── Tipos adicionales para Caja, Creditos, Ventas, Clientes ────────────────────
 
-export interface FiadoClient {
+export interface CreditoClient {
   id: string;
   client_name: string;
   client_phone: string | null;
@@ -285,7 +285,7 @@ export interface FiadoClient {
   notes: string | null;
 }
 
-export interface FiadoPayment {
+export interface CreditoPayment {
   id: string;
   amount: number;
   payment_method: string;
@@ -293,10 +293,10 @@ export interface FiadoPayment {
   notes: string | null;
 }
 
-// Settled-fiado row for the history tab. Org-wide: a debt saldada at any
+// Settled-credito row for the history tab. Org-wide: a debt saldada at any
 // register/sede shows here. Wire shape produced by the backend
-// (getFiadosHistoryForPos) — snake_case on purpose.
-export interface FiadoHistoryItem {
+// (getCreditosHistoryForPos) — snake_case on purpose.
+export interface CreditoHistoryItem {
   id: string;
   client_name: string;
   client_phone: string | null;
@@ -383,26 +383,26 @@ export const api = {
     list: () => req<{ suppliers: SupplierLite[] }>('/pos/suppliers'),
   },
 
-  fiados: {
-    list: () => req<{ clients: FiadoClient[]; stats: Record<string, number> }>('/pos/fiados'),
-    // `clientKey` is FiadoClient.id from /pos/fiados: the server groups a client's
+  creditos: {
+    list: () => req<{ clients: CreditoClient[]; stats: Record<string, number> }>('/pos/creditos'),
+    // `clientKey` is CreditoClient.id from /pos/creditos: the server groups a client's
     // debts under one key and distributes the abono FIFO (oldest due first). The
     // endpoints are action-style (/abonar, /settle) and expect { clientKey, method },
-    // NOT the old Tiendademo REST shape (/fiados/{id}/pay, { paymentMethod }).
+    // NOT the old Tiendademo REST shape (/creditos/{id}/pay, { paymentMethod }).
     abonar: (clientKey: string, amount: number, method: string, notes?: string) =>
-      req<{ applied: number; remaining: number; settledSaleIds: string[]; hitCaja: boolean }>('/pos/fiados/abonar', {
+      req<{ applied: number; remaining: number; settledSaleIds: string[]; hitCaja: boolean }>('/pos/creditos/abonar', {
         method: 'POST',
         body: JSON.stringify({ clientKey, amount, method, notes }),
       }),
     settle: (clientKey: string, method: string) =>
-      req<{ settledSaleIds: string[]; settled: number; totalPaid: number }>('/pos/fiados/settle', {
+      req<{ settledSaleIds: string[]; settled: number; totalPaid: number }>('/pos/creditos/settle', {
         method: 'POST',
         body: JSON.stringify({ clientKey, method }),
       }),
-    // Org-wide settled-fiado history. Goes through req() so it hits the backend
+    // Org-wide settled-credito history. Goes through req() so it hits the backend
     // origin (BASE) with auth — a raw relative fetch would hit the device's own
     // host and silently return nothing.
-    history: () => req<FiadoHistoryItem[]>('/pos/fiados/history'),
+    history: () => req<CreditoHistoryItem[]>('/pos/creditos/history'),
   },
 
   sales: {

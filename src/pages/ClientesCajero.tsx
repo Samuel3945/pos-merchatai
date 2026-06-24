@@ -77,7 +77,7 @@ export default function ClientesCajero() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-ink font-black text-xl tracking-tight">Clientes</h1>
-            <p className="text-ink-3 text-xs mt-0.5">Registra y consulta clientes para fiados y facturas.</p>
+            <p className="text-ink-3 text-xs mt-0.5">Registra y consulta clientes para créditos y facturas.</p>
           </div>
           <button onClick={openCreate}
             className="flex items-center gap-1.5 h-9 px-4 bg-primary-soft hover:bg-primary-soft text-primary font-semibold rounded-xl text-sm transition-colors active:scale-95">
