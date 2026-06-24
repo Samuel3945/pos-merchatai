@@ -323,6 +323,27 @@ export interface SupplierLite {
   company: string | null;
 }
 
+export interface SupplierOutstandingInvoice {
+  payableId: string;
+  invoiceNumber: string | null;
+  outstanding: string;
+  status: 'open' | 'partial';
+}
+
+export interface SupplierOutstanding {
+  supplierId: string;
+  totalOutstanding: string;
+  invoiceCount: number;
+  invoices: SupplierOutstandingInvoice[];
+}
+
+export interface MovementOutcome {
+  outcome: 'settled' | 'gasto';
+  appliedTotal?: string;
+  excess?: string;
+  settledPayables?: number;
+}
+
 // ── API surface ───────────────────────────────────────────────────────────────
 
 export const api = {
@@ -372,7 +393,7 @@ export const api = {
         body: JSON.stringify({ countedAmount, notes }),
       }),
     addMovement: (type: CashMovementType, amount: number, reason: string, supplierId?: string | null) =>
-      req<CashMovement>('/pos/cash/movement', {
+      req<CashMovement & MovementOutcome>('/pos/cash/movement', {
         method: 'POST',
         body: JSON.stringify({ type, amount, reason, supplierId: supplierId ?? null }),
       }),
@@ -381,6 +402,9 @@ export const api = {
   suppliers: {
     // Active suppliers of the caja's org, for the "Pago a proveedor" select.
     list: () => req<{ suppliers: SupplierLite[] }>('/pos/suppliers'),
+    // Outstanding invoices for a specific supplier. Used to surface the debt
+    // summary before registering a "Pago a proveedor" movement.
+    outstanding: (id: string) => req<SupplierOutstanding>(`/pos/suppliers/${id}/outstanding`),
   },
 
   creditos: {
