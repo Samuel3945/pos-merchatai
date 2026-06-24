@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { api, CashSession, CashMovement, CashMovementType, SupplierLite } from '../services/api';
+import { api, CashSession, CashMovement, CashMovementType, SupplierLite, SupplierOutstanding, MovementOutcome } from '../services/api';
 import {
   ENTRY_MOTIVOS,
   EXIT_MOTIVOS,
@@ -95,11 +95,21 @@ export default function CajaCajero() {
   const [supplierLoading, setSupplierLoading] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<SupplierLite | null>(null);
   const [supplierQuery, setSupplierQuery]     = useState('');
+  // Deuda pendiente del proveedor seleccionado. Se carga al elegir un proveedor
+  // y se muestra como contexto antes de confirmar el pago. null = no cargado o
+  // el fetch falló (degradamos sin bloquear el flujo).
+  const [supplierOutstanding, setSupplierOutstanding] = useState<SupplierOutstanding | null>(null);
+  const [outstandingLoading, setOutstandingLoading] = useState(false);
+  // Resultado del último movimiento de "Pago a proveedor": indica si se saldaron
+  // facturas o si se registró como gasto sin facturas pendientes.
+  const [moveOutcome, setMoveOutcome] = useState<MovementOutcome | null>(null);
 
   const resetMovementFields = () => {
     setMoveReason('');
     setSelectedSupplier(null);
     setSupplierQuery('');
+    setSupplierOutstanding(null);
+    setMoveOutcome(null);
   };
 
   const load = useCallback(async () => {
@@ -172,17 +182,47 @@ export default function CajaCajero() {
       .finally(() => setSupplierLoading(false));
   }, [motivo, suppliers.length, supplierLoading]);
 
+  // Al seleccionar un proveedor, traemos su deuda pendiente. Si el fetch falla,
+  // simplemente dejamos supplierOutstanding en null y el cajero puede seguir.
+  useEffect(() => {
+    if (!selectedSupplier) { setSupplierOutstanding(null); return; }
+    let active = true;
+    setOutstandingLoading(true);
+    api.suppliers.outstanding(selectedSupplier.id)
+      .then(data => { if (active) setSupplierOutstanding(data); })
+      .catch(() => { if (active) setSupplierOutstanding(null); })
+      .finally(() => { if (active) setOutstandingLoading(false); });
+    return () => { active = false; };
+  }, [selectedSupplier]);
+
   const handleMove = async () => {
     const amt = parseFloat(moveAmount);
     if (!amt || amt <= 0) { setError('Ingresa un monto válido'); return; }
+    // Block overpay on the settle path: the backend will reject it with 400 anyway,
+    // but we stop it client-side first to give a clearer inline message.
+    if (
+      motivo === 'pago_proveedor' &&
+      supplierOutstanding !== null &&
+      parseFloat(supplierOutstanding.totalOutstanding) > 0 &&
+      amt > parseFloat(supplierOutstanding.totalOutstanding)
+    ) {
+      setError(`El monto supera la deuda del proveedor (${COP(parseFloat(supplierOutstanding.totalOutstanding))}). Reducí el monto o registralo como gasto aparte.`);
+      return;
+    }
     // El motivo ya define el tipo; solo "Otro" exige una descripción escrita.
     if (motivo === 'otro' && !moveReason.trim()) { setError('Describe el motivo'); return; }
     const { type, reason } = composeMovement(movDirection, motivo, moveReason, selectedSupplier?.name);
     setMoveBusy(true); setError('');
     try {
-      await api.cash.addMovement(type, amt, reason, selectedSupplier?.id ?? null);
-      setShowMove(false); setMoveAmount(''); resetMovementFields();
-      showOk('Movimiento registrado');
+      const result = await api.cash.addMovement(type, amt, reason, selectedSupplier?.id ?? null);
+      // Capturamos el outcome antes de limpiar el estado para mostrarlo en el
+      // banner de confirmación. Solo aplica para "Pago a proveedor".
+      if (motivo === 'pago_proveedor' && result.outcome) {
+        setMoveOutcome({ outcome: result.outcome, appliedTotal: result.appliedTotal, settledPayables: result.settledPayables });
+      } else {
+        setShowMove(false); setMoveAmount(''); resetMovementFields();
+        showOk('Movimiento registrado');
+      }
       load();
     } catch (e: any) { setError(e.message || 'Error al registrar'); }
     finally { setMoveBusy(false); }
@@ -439,11 +479,39 @@ export default function CajaCajero() {
           <div className="bg-surface border border-line rounded-t-2xl sm:rounded-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <h2 className="font-bold text-ink text-lg">Movimiento de caja</h2>
-              <button onClick={() => { setShowMove(false); setError(''); }} className="text-ink-3 hover:text-ink">
+              <button onClick={() => { setShowMove(false); resetMovementFields(); setError(''); }} className="text-ink-3 hover:text-ink">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
 
+            {/* Confirmación de pago a proveedor: muestra si se saldaron facturas
+                o si el pago se registró como gasto (sin facturas pendientes). */}
+            {moveOutcome ? (
+              <>
+                {moveOutcome.outcome === 'settled' ? (
+                  <div className="bg-success-soft/20 border border-success/40 rounded-xl px-4 py-3 space-y-1">
+                    <div className="text-success font-bold text-sm">
+                      Facturas saldadas — {COP(parseFloat(moveOutcome.appliedTotal || '0'))}
+                    </div>
+                    {(moveOutcome.settledPayables ?? 0) > 0 && (
+                      <div className="text-ink-3 text-xs">
+                        {moveOutcome.settledPayables} factura{moveOutcome.settledPayables !== 1 ? 's' : ''} cerrada{moveOutcome.settledPayables !== 1 ? 's' : ''}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="bg-surface-2 border border-line rounded-xl px-4 py-3">
+                    <div className="text-ink text-sm font-semibold">Registrado como gasto</div>
+                    <div className="text-ink-3 text-xs mt-0.5">El proveedor no tenía facturas pendientes</div>
+                  </div>
+                )}
+                <button onClick={() => { setShowMove(false); setMoveAmount(''); resetMovementFields(); }}
+                  className="w-full h-11 bg-success-soft hover:bg-success-soft text-success font-bold rounded-xl transition-colors">
+                  Listo
+                </button>
+              </>
+            ) : (
+            <>
             {/* Toggle entrada / salida */}
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => handleDirection('out')}
@@ -488,17 +556,34 @@ export default function CajaCajero() {
               <div>
                 <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">Proveedor</label>
                 {selectedSupplier ? (
-                  <div className="flex items-center justify-between bg-primary-soft/30 border border-primary/40 rounded-xl px-4 py-2.5">
-                    <div className="min-w-0">
-                      <div className="text-primary text-sm font-semibold truncate">{selectedSupplier.name}</div>
-                      {selectedSupplier.company && (
-                        <div className="text-ink-3 text-xs truncate">{selectedSupplier.company}</div>
-                      )}
+                  <div>
+                    <div className="flex items-center justify-between bg-primary-soft/30 border border-primary/40 rounded-xl px-4 py-2.5">
+                      <div className="min-w-0">
+                        <div className="text-primary text-sm font-semibold truncate">{selectedSupplier.name}</div>
+                        {selectedSupplier.company && (
+                          <div className="text-ink-3 text-xs truncate">{selectedSupplier.company}</div>
+                        )}
+                      </div>
+                      <button type="button" onClick={() => { setSelectedSupplier(null); setSupplierQuery(''); }}
+                        className="text-ink-3 text-xs font-semibold hover:text-ink shrink-0 ml-2">
+                        Cambiar
+                      </button>
                     </div>
-                    <button type="button" onClick={() => { setSelectedSupplier(null); setSupplierQuery(''); }}
-                      className="text-ink-3 text-xs font-semibold hover:text-ink shrink-0 ml-2">
-                      Cambiar
-                    </button>
+                    {/* Deuda pendiente del proveedor — se muestra apenas se carga */}
+                    {outstandingLoading && (
+                      <div className="text-ink-3 text-xs mt-1.5">Verificando facturas pendientes…</div>
+                    )}
+                    {!outstandingLoading && supplierOutstanding !== null && (
+                      parseFloat(supplierOutstanding.totalOutstanding) > 0 ? (
+                        <div className="mt-1.5 bg-warn-soft/30 border border-warn/40 rounded-xl px-3 py-2 text-xs text-warn font-medium">
+                          Debe {COP(parseFloat(supplierOutstanding.totalOutstanding))} en {supplierOutstanding.invoiceCount} factura{supplierOutstanding.invoiceCount !== 1 ? 's' : ''}
+                        </div>
+                      ) : (
+                        <div className="mt-1.5 bg-surface-2 border border-line rounded-xl px-3 py-2 text-xs text-ink-3">
+                          Sin facturas pendientes — se registrará como gasto
+                        </div>
+                      )
+                    )}
                   </div>
                 ) : (
                   <>
@@ -528,11 +613,35 @@ export default function CajaCajero() {
             )}
 
             {/* Monto */}
-            <div>
-              <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">Monto</label>
-              <input type="number" value={moveAmount} onChange={e => setMoveAmount(e.target.value)} placeholder="0"
-                className="w-full bg-bg border border-line rounded-xl px-4 py-2.5 text-ink text-sm focus:border-primary outline-none transition-colors" />
-            </div>
+            {(() => {
+              const outstandingCap =
+                motivo === 'pago_proveedor' &&
+                supplierOutstanding !== null &&
+                parseFloat(supplierOutstanding.totalOutstanding) > 0
+                  ? parseFloat(supplierOutstanding.totalOutstanding)
+                  : null;
+              const parsedAmt = parseFloat(moveAmount);
+              const exceedsCap = outstandingCap !== null && !isNaN(parsedAmt) && parsedAmt > outstandingCap;
+              return (
+                <div>
+                  <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">Monto</label>
+                  <input
+                    type="number"
+                    value={moveAmount}
+                    onChange={e => setMoveAmount(e.target.value)}
+                    placeholder="0"
+                    min={0.01}
+                    {...(outstandingCap !== null ? { max: outstandingCap } : {})}
+                    className={`w-full bg-bg border rounded-xl px-4 py-2.5 text-ink text-sm focus:border-primary outline-none transition-colors ${exceedsCap ? 'border-danger' : 'border-line'}`}
+                  />
+                  {exceedsCap && (
+                    <div className="mt-1 text-danger text-xs font-medium">
+                      Máximo: {COP(outstandingCap)} (lo que debe el proveedor)
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Nota con presets rápidos */}
             <div>
@@ -565,11 +674,13 @@ export default function CajaCajero() {
                 className="h-11 bg-primary-soft hover:bg-primary-soft disabled:opacity-40 text-primary font-bold rounded-xl transition-colors">
                 {moveBusy ? 'Guardando…' : 'Registrar'}
               </button>
-              <button onClick={() => { setShowMove(false); setError(''); }}
+              <button onClick={() => { setShowMove(false); resetMovementFields(); setError(''); }}
                 className="h-11 bg-surface-2 border border-line text-ink-2 font-semibold rounded-xl hover:bg-surface-3 transition-colors">
                 Cancelar
               </button>
             </div>
+            </>
+            )}
           </div>
         </div>
       )}
