@@ -196,6 +196,17 @@ export default function CajaCajero() {
   const handleMove = async () => {
     const amt = parseFloat(moveAmount);
     if (!amt || amt <= 0) { setError('Ingresa un monto válido'); return; }
+    // Block overpay on the settle path: the backend will reject it with 400 anyway,
+    // but we stop it client-side first to give a clearer inline message.
+    if (
+      motivo === 'pago_proveedor' &&
+      supplierOutstanding !== null &&
+      parseFloat(supplierOutstanding.totalOutstanding) > 0 &&
+      amt > parseFloat(supplierOutstanding.totalOutstanding)
+    ) {
+      setError(`El monto supera la deuda del proveedor (${COP(parseFloat(supplierOutstanding.totalOutstanding))}). Reducí el monto o registralo como gasto aparte.`);
+      return;
+    }
     // El motivo ya define el tipo; solo "Otro" exige una descripción escrita.
     if (motivo === 'otro' && !moveReason.trim()) { setError('Describe el motivo'); return; }
     const { type, reason } = composeMovement(movDirection, motivo, moveReason, selectedSupplier?.name);
@@ -205,7 +216,7 @@ export default function CajaCajero() {
       // Capturamos el outcome antes de limpiar el estado para mostrarlo en el
       // banner de confirmación. Solo aplica para "Pago a proveedor".
       if (motivo === 'pago_proveedor' && result.outcome) {
-        setMoveOutcome({ outcome: result.outcome, appliedTotal: result.appliedTotal, excess: result.excess, settledPayables: result.settledPayables });
+        setMoveOutcome({ outcome: result.outcome, appliedTotal: result.appliedTotal, settledPayables: result.settledPayables });
       } else {
         setShowMove(false); setMoveAmount(''); resetMovementFields();
         showOk('Movimiento registrado');
@@ -485,11 +496,6 @@ export default function CajaCajero() {
                         {moveOutcome.settledPayables} factura{moveOutcome.settledPayables !== 1 ? 's' : ''} cerrada{moveOutcome.settledPayables !== 1 ? 's' : ''}
                       </div>
                     )}
-                    {moveOutcome.excess && parseFloat(moveOutcome.excess) > 0 && (
-                      <div className="text-ink-2 text-xs">
-                        Sobrante: {COP(parseFloat(moveOutcome.excess))} registrado como gasto
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <div className="bg-surface-2 border border-line rounded-xl px-4 py-3">
@@ -605,11 +611,35 @@ export default function CajaCajero() {
             )}
 
             {/* Monto */}
-            <div>
-              <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">Monto</label>
-              <input type="number" value={moveAmount} onChange={e => setMoveAmount(e.target.value)} placeholder="0"
-                className="w-full bg-bg border border-line rounded-xl px-4 py-2.5 text-ink text-sm focus:border-primary outline-none transition-colors" />
-            </div>
+            {(() => {
+              const outstandingCap =
+                motivo === 'pago_proveedor' &&
+                supplierOutstanding !== null &&
+                parseFloat(supplierOutstanding.totalOutstanding) > 0
+                  ? parseFloat(supplierOutstanding.totalOutstanding)
+                  : null;
+              const parsedAmt = parseFloat(moveAmount);
+              const exceedsCap = outstandingCap !== null && !isNaN(parsedAmt) && parsedAmt > outstandingCap;
+              return (
+                <div>
+                  <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">Monto</label>
+                  <input
+                    type="number"
+                    value={moveAmount}
+                    onChange={e => setMoveAmount(e.target.value)}
+                    placeholder="0"
+                    min={0.01}
+                    {...(outstandingCap !== null ? { max: outstandingCap } : {})}
+                    className={`w-full bg-bg border rounded-xl px-4 py-2.5 text-ink text-sm focus:border-primary outline-none transition-colors ${exceedsCap ? 'border-danger' : 'border-line'}`}
+                  />
+                  {exceedsCap && (
+                    <div className="mt-1 text-danger text-xs font-medium">
+                      Máximo: {COP(outstandingCap)} (lo que debe el proveedor)
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Nota con presets rápidos */}
             <div>

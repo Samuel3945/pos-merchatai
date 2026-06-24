@@ -340,7 +340,6 @@ export interface SupplierOutstanding {
 export interface MovementOutcome {
   outcome: 'settled' | 'gasto';
   appliedTotal?: string;
-  excess?: string;
   settledPayables?: number;
 }
 
