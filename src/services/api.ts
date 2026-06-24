@@ -262,7 +262,7 @@ export interface MeResponse {
     locationId:   string | null;
   };
   store: { id: string; name: string; phone: string; type: string; offering: string; fiadoTermDays?: number };
-  features: { fiadoEnabled: boolean; sellByWeight: boolean; sellDigital: boolean; wholesale: boolean; canConfirmTransfers: boolean };
+  features: { fiadoEnabled: boolean; sellByWeight: boolean; sellDigital: boolean; wholesale: boolean; canConfirmTransfers: boolean; allowOversell?: boolean };
   paymentMethods: PaymentMethod[];
   cashiers:       CashierLite[];
   products:       Product[];

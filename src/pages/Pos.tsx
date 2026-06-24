@@ -215,6 +215,9 @@ export default function Pos({ session, onLogout }: Props) {
   const [fiadoEnabled, setFiadoEnabled] = useState(false);
   const [fiadoTermDays, setFiadoTermDays] = useState(30);
   const [canConfirmTransfers, setCanConfirmTransfers] = useState(true);
+  // Per-caja: when true this device sells without stock control — products at
+  // stock 0 stay sellable (used while loading inventory in a new shop).
+  const [allowOversell, setAllowOversell] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
   const [queuedSales, setQueuedSales] = useState<QueuedSale[]>([]);
   const [queueErrors, setQueueErrors] = useState<Record<number, string>>({});
@@ -292,6 +295,7 @@ export default function Pos({ session, onLogout }: Props) {
         typeof (me.store as any)?.fiadoTermDays === 'number' ? (me.store as any).fiadoTermDays : 30,
       );
       setCanConfirmTransfers(me.features?.canConfirmTransfers !== false);
+      setAllowOversell(!!me.features?.allowOversell);
       // Caja abierta: el happy-path lee `cash.cashSessionId` de /pos/me. Pero un
       // backend desplegado más viejo puede no devolver ese campo todavía → ahí el
       // POS quedaba bloqueado en "Caja cerrada" para siempre aunque la caja SÍ
@@ -405,10 +409,12 @@ export default function Pos({ session, onLogout }: Props) {
   };
 
   const addToCart = (product: Product, qty: number) => {
-    if (product.stock <= 0) { flashBorder('err'); return; }
+    // allowOversell: this caja can sell at stock 0 (no stock control), so the
+    // out-of-stock guard and the per-unit cap against available stock are skipped.
+    if (!allowOversell && product.stock <= 0) { flashBorder('err'); return; }
     setCart(prev => {
       const ex = prev.find(i => i.productId === product.id);
-      if (product.unit_type === 'unit') {
+      if (!allowOversell && product.unit_type === 'unit') {
         const currentQty = ex?.qty ?? 0;
         if (currentQty + qty > product.stock) { flashBorder('err'); return prev; }
       }
@@ -425,7 +431,7 @@ export default function Pos({ session, onLogout }: Props) {
   };
 
   const handleProductClick = (product: Product) => {
-    if (product.stock <= 0) { flashBorder('err'); return; }
+    if (!allowOversell && product.stock <= 0) { flashBorder('err'); return; }
     if (product.unit_type === 'kg') {
       setKgProduct(product); // open weight modal
     } else {
@@ -885,7 +891,7 @@ export default function Pos({ session, onLogout }: Props) {
                 const out = p.stock <= 0;
                 const low = !out && p.unit_type === 'unit' && p.stock <= lowStockThreshold(p.id);
                 return (
-              <button key={p.id} onClick={() => handleProductClick(p)} disabled={out}
+              <button key={p.id} onClick={() => handleProductClick(p)} disabled={out && !allowOversell}
                 className="group relative flex flex-col gap-2.5 min-h-[150px] text-left rounded-2xl border border-line bg-surface p-3 transition-all hover:-translate-y-0.5 hover:border-primary hover:shadow-token2 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed">
                 <div className="flex items-start justify-between">
                   <span className="w-12 h-12 rounded-xl grid place-items-center bg-surface-2 border border-line text-ink-3 group-hover:text-primary transition-colors">
@@ -898,7 +904,7 @@ export default function Pos({ session, onLogout }: Props) {
                 <div className="text-[13.5px] font-semibold leading-snug flex-1">{p.name}</div>
                 <div className="flex items-end justify-between gap-2">
                   {out ? (
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-danger">Sin stock</span>
+                    <span className={`text-[10px] font-bold uppercase tracking-wider ${allowOversell ? 'text-warn' : 'text-danger'}`}>Sin stock</span>
                   ) : p.unit_type === 'kg' ? (
                     <span className="text-[11px] text-ink-3 tnum">{Number(p.stock)} kg disp.</span>
                   ) : low ? (
