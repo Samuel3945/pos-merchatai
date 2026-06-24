@@ -186,11 +186,13 @@ export default function CajaCajero() {
   // simplemente dejamos supplierOutstanding en null y el cajero puede seguir.
   useEffect(() => {
     if (!selectedSupplier) { setSupplierOutstanding(null); return; }
+    let active = true;
     setOutstandingLoading(true);
     api.suppliers.outstanding(selectedSupplier.id)
-      .then(data => setSupplierOutstanding(data))
-      .catch(() => setSupplierOutstanding(null))
-      .finally(() => setOutstandingLoading(false));
+      .then(data => { if (active) setSupplierOutstanding(data); })
+      .catch(() => { if (active) setSupplierOutstanding(null); })
+      .finally(() => { if (active) setOutstandingLoading(false); });
+    return () => { active = false; };
   }, [selectedSupplier]);
 
   const handleMove = async () => {
