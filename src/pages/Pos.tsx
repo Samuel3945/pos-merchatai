@@ -212,8 +212,8 @@ export default function Pos({ session, onLogout }: Props) {
   const [kgProduct, setKgProduct] = useState<Product | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [showCheckout, setShowCheckout] = useState(false);
-  const [fiadoEnabled, setFiadoEnabled] = useState(false);
-  const [fiadoTermDays, setFiadoTermDays] = useState(30);
+  const [creditoEnabled, setCreditoEnabled] = useState(false);
+  const [creditoTermDays, setCreditoTermDays] = useState(30);
   const [canConfirmTransfers, setCanConfirmTransfers] = useState(true);
   // Per-caja: when true this device sells without stock control — products at
   // stock 0 stay sellable (used while loading inventory in a new shop).
@@ -276,7 +276,7 @@ export default function Pos({ session, onLogout }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // /api/pos/me devuelve catálogo + paymentMethods + features.fiadoEnabled en
+  // /api/pos/me devuelve catálogo + paymentMethods + features.creditoEnabled en
   // una sola llamada — es lo que el JWT de dispositivo puede consumir.
   const loadFromServer = async () => {
     try {
@@ -290,9 +290,9 @@ export default function Pos({ session, onLogout }: Props) {
       setAllProducts(me.products);
       setResults(me.products);
       setPaymentMethods(Array.isArray(me.paymentMethods) ? me.paymentMethods : []);
-      setFiadoEnabled(!!me.features?.fiadoEnabled);
-      setFiadoTermDays(
-        typeof (me.store as any)?.fiadoTermDays === 'number' ? (me.store as any).fiadoTermDays : 30,
+      setCreditoEnabled(!!me.features?.creditoEnabled);
+      setCreditoTermDays(
+        typeof (me.store as any)?.creditoTermDays === 'number' ? (me.store as any).creditoTermDays : 30,
       );
       setCanConfirmTransfers(me.features?.canConfirmTransfers !== false);
       setAllowOversell(!!me.features?.allowOversell);
@@ -660,9 +660,9 @@ export default function Pos({ session, onLogout }: Props) {
         <CheckoutModal
           total={total}
           paymentMethods={paymentMethods}
-          fiadoEnabled={fiadoEnabled}
+          creditoEnabled={creditoEnabled}
           canConfirmTransfers={canConfirmTransfers}
-          fiadoTermDays={fiadoTermDays}
+          creditoTermDays={creditoTermDays}
           loading={loading}
           onConfirm={completeSaleMixed}
           onCancel={() => setShowCheckout(false)}

@@ -92,7 +92,7 @@ export interface SalePayment {
   reference?:    string | null;
 }
 
-export type PaymentMethodType = 'cash' | 'nequi' | 'llave' | 'fiado';
+export type PaymentMethodType = 'cash' | 'nequi' | 'llave' | 'credito';
 
 export interface PaymentMethodDetails {
   bank?:           string;
@@ -140,7 +140,7 @@ export interface LoginResponse {
 export interface MeResponse {
   cash:           CashSummary;
   store:          { id: string; name: string; phone: string; type: string; offering: string };
-  features:       { fiadoEnabled: boolean; sellByWeight: boolean; sellDigital: boolean; wholesale: boolean };
+  features:       { creditoEnabled: boolean; sellByWeight: boolean; sellDigital: boolean; wholesale: boolean };
   paymentMethods: PaymentMethod[];
   products:       Product[];
   serverTime:     string;

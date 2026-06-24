@@ -36,15 +36,15 @@ const MOVEMENT_LABELS: Record<CashMovementType, string> = {
   deposit:            'Depósito',
   adjustment:         'Ajuste',
   advance:            'Vale empleado',
-  fiado_payment:      'Cobro de fiado',
+  credito_payment:      'Cobro de crédito',
   reclassification:   'Reclasificación',
 };
 
 // Cash inflows (added to the drawer). Everything else is an outflow. Mirrors the
 // backend direction map (MerchantAI features/cash/cash-ui.ts TYPE_META) so a
-// fiado payment shows as a positive entry here just like in the admin panel.
+// credito payment shows as a positive entry here just like in the admin panel.
 const INFLOW_TYPES = new Set<CashMovementType>([
-  'sale', 'deposit', 'adjustment', 'fiado_payment', 'reclassification',
+  'sale', 'deposit', 'adjustment', 'credito_payment', 'reclassification',
 ]);
 
 export default function CajaCajero() {

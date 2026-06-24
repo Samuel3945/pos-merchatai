@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { api, FiadoClient, FiadoHistoryItem, PaymentMethod } from '../services/api';
+import { api, CreditoClient, CreditoHistoryItem, PaymentMethod } from '../services/api';
 
 const COP = (n: number) => '$' + Math.round(Number(n) || 0).toLocaleString('es-CO');
 
@@ -27,12 +27,12 @@ function colorForType(type: string): string {
 
 function isAvailableNow(pm: PaymentMethod): boolean {
   if (!pm.active) return false;
-  if (pm.type === 'fiado') return false;
+  if (pm.type === 'credito') return false;
   return true;
 }
 
-export default function FiadosCajero() {
-  const [clients, setClients]         = useState<FiadoClient[]>([]);
+export default function CreditosCajero() {
+  const [clients, setClients]         = useState<CreditoClient[]>([]);
   const [stats, setStats]             = useState<Record<string, number>>({});
   const [loading, setLoading]         = useState(true);
   const [search, setSearch]           = useState('');
@@ -40,11 +40,11 @@ export default function FiadosCajero() {
   const [success, setSuccess]         = useState('');
   const [paymentOptions, setPaymentOptions] = useState<PaymentMethod[]>([DEFAULT_METHOD]);
   const [activeTab, setActiveTab]     = useState<'pendientes' | 'historial'>('pendientes');
-  const [history, setHistory]         = useState<FiadoHistoryItem[]>([]);
+  const [history, setHistory]         = useState<CreditoHistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
   // Modal pago / saldar
-  const [selected, setSelected]       = useState<FiadoClient | null>(null);
+  const [selected, setSelected]       = useState<CreditoClient | null>(null);
   const [mode, setMode]               = useState<'abonar' | 'saldar'>('abonar');
   const [method, setMethod]           = useState('Efectivo');
   const [busy, setBusy]               = useState(false);
@@ -56,10 +56,10 @@ export default function FiadosCajero() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const d = await api.fiados.list();
+      const d = await api.creditos.list();
       setClients(d.clients || []);
       setStats(d.stats || {});
-    } catch { setError('No se pudo cargar los fiados'); }
+    } catch { setError('No se pudo cargar los créditos'); }
     finally { setLoading(false); }
   }, []);
 
@@ -78,7 +78,7 @@ export default function FiadosCajero() {
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
     try {
-      setHistory(await api.fiados.history());
+      setHistory(await api.creditos.history());
     } catch { setHistory([]); }
     finally { setHistoryLoading(false); }
   }, []);
@@ -87,13 +87,13 @@ export default function FiadosCajero() {
 
   const showOk = (msg: string) => { setSuccess(msg); setTimeout(() => setSuccess(''), 3500); };
 
-  const openAbonar = (c: FiadoClient) => {
+  const openAbonar = (c: CreditoClient) => {
     setSelected(c); setMode('abonar');
     setAbonoAmount(''); setAbonoError(''); setError('');
     setMethod(paymentOptions[0]?.name ?? 'Efectivo');
   };
 
-  const openSaldar = (c: FiadoClient) => {
+  const openSaldar = (c: CreditoClient) => {
     setSelected(c); setMode('saldar'); setError('');
     setMethod(paymentOptions[0]?.name ?? 'Efectivo');
   };
@@ -111,7 +111,7 @@ export default function FiadosCajero() {
       }
       setBusy(true); setAbonoError('');
       try {
-        await api.fiados.abonar(selected.id, amt, method);
+        await api.creditos.abonar(selected.id, amt, method);
         setSelected(null); setAbonoAmount('');
         showOk(`Abono de ${COP(amt)} registrado`);
         load();
@@ -120,9 +120,9 @@ export default function FiadosCajero() {
     } else {
       setBusy(true); setError('');
       try {
-        await api.fiados.settle(selected.id, method);
+        await api.creditos.settle(selected.id, method);
         setSelected(null);
-        showOk('Fiado saldado completamente');
+        showOk('Crédito saldado completamente');
         load();
       } catch (e: any) { setError(e.message || 'Error al saldar'); }
       finally { setBusy(false); }
@@ -167,7 +167,7 @@ export default function FiadosCajero() {
         </div>
 
         {activeTab === 'historial' ? (
-          /* ── Historial de fiados saldados ── */
+          /* ── Historial de creditos saldados ── */
           historyLoading ? (
             <div className="flex items-center justify-center py-16">
               <span className="material-symbols-outlined text-3xl animate-spin text-ink-3">progress_activity</span>
@@ -176,7 +176,7 @@ export default function FiadosCajero() {
             <div className="py-16 text-center text-ink-3">
               <span className="material-symbols-outlined text-5xl block mb-3">history</span>
               <p className="text-ink font-bold">Sin historial aún</p>
-              <p className="text-xs mt-1">Los fiados saldados aparecerán aquí</p>
+              <p className="text-xs mt-1">Los créditos saldados aparecerán aquí</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -234,7 +234,7 @@ export default function FiadosCajero() {
         {filtered.length === 0 ? (
           <div className="py-16 text-center text-ink-3">
             <span className="material-symbols-outlined text-5xl block mb-3">handshake</span>
-            <p className="text-ink font-bold">Sin fiados pendientes</p>
+            <p className="text-ink font-bold">Sin créditos pendientes</p>
           </div>
         ) : (
           <div className="space-y-2">

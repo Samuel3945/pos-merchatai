@@ -3,13 +3,13 @@ import Login from './pages/Login';
 import SelectCashier from './pages/SelectCashier';
 import Pos from './pages/Pos';
 import CajaCajero from './pages/CajaCajero';
-import FiadosCajero from './pages/FiadosCajero';
+import CreditosCajero from './pages/CreditosCajero';
 import VentasCajero from './pages/VentasCajero';
 import ClientesCajero from './pages/ClientesCajero';
 import { loadSession, saveSession, clearSession, type PosSession } from './lib/storage';
 import { getActiveCashier, setActiveCashier, setSessionEpoch } from './services/api';
 
-type Tab = 'pos' | 'caja' | 'fiados' | 'ventas' | 'clientes';
+type Tab = 'pos' | 'caja' | 'creditos' | 'ventas' | 'clientes';
 type Theme = 'dark' | 'light';
 
 type Screen =
@@ -35,7 +35,7 @@ function initialTheme(): Theme {
 const TABS: Array<{ id: Tab; icon: string; label: string }> = [
   { id: 'pos',      icon: 'point_of_sale',          label: 'POS'      },
   { id: 'caja',     icon: 'account_balance_wallet',  label: 'Caja'     },
-  { id: 'fiados',   icon: 'handshake',               label: 'Fiados'   },
+  { id: 'creditos',   icon: 'handshake',               label: 'Créditos'   },
   { id: 'ventas',   icon: 'receipt_long',             label: 'Ventas'   },
   { id: 'clientes', icon: 'groups',                  label: 'Clientes' },
 ];
@@ -191,7 +191,7 @@ export default function App() {
           <Pos session={session} onLogout={onLogout} />
         </div>
         {tab === 'caja'     && <CajaCajero />}
-        {tab === 'fiados'   && <FiadosCajero />}
+        {tab === 'creditos'   && <CreditosCajero />}
         {tab === 'ventas'   && <VentasCajero session={session} />}
         {tab === 'clientes' && <ClientesCajero />}
       </main>

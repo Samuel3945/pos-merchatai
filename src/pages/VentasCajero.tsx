@@ -12,7 +12,7 @@ const LIMIT = 50;
 function paymentBadgeClass(pt: string) {
   const p = (pt || '').toLowerCase();
   if (p === 'efectivo' || p === 'cash') return 'bg-success-soft text-success';
-  if (p === 'fiado')                    return 'bg-warn-soft text-warn';
+  if (p === 'credito')                    return 'bg-warn-soft text-warn';
   if (p.includes('transfer') || p.includes('nequi') || p.includes('daviplata') ||
       p.includes('llave') || p.includes('banco'))
     return 'bg-primary-soft text-primary';
@@ -30,7 +30,7 @@ function relativeDate(iso: string) {
   return d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short', timeZone: 'America/Bogota' }) + ` ${time}`;
 }
 
-function parseFiadoNotes(notes: string | null) {
+function parseCreditoNotes(notes: string | null) {
   if (!notes) return null;
   return notes.split(' | ').map(p => p.trim()).filter(Boolean);
 }
@@ -186,7 +186,7 @@ export default function VentasCajero({ session }: Props) {
     };
     api.pos.paymentMethods().then(methods => {
       const rest = (Array.isArray(methods) ? methods : [])
-        .filter(m => m.active && m.type !== 'fiado' && m.type !== 'cash');
+        .filter(m => m.active && m.type !== 'credito' && m.type !== 'cash');
       setCorrectMethods([systemCash, ...rest]);
     }).catch(() => setCorrectMethods([systemCash]));
   };
@@ -263,7 +263,7 @@ export default function VentasCajero({ session }: Props) {
               { value: '',          label: 'Todos',         icon: 'all_inclusive',  show: true },
               { value: 'efectivo',  label: 'Efectivo',      icon: 'payments',       show: true },
               { value: 'transfer',  label: 'Transferencia', icon: 'swap_horiz',     show: hasTransfer },
-              { value: 'fiado',     label: 'Fiado',         icon: 'handshake',      show: true },
+              { value: 'credito',     label: 'Crédito',         icon: 'handshake',      show: true },
             ] as const).filter(opt => opt.show).map(opt => (
               <button key={opt.value}
                 onClick={() => { setPaymentFilter(opt.value); setPage(0); }}
@@ -271,7 +271,7 @@ export default function VentasCajero({ session }: Props) {
                   paymentFilter === opt.value
                     ? opt.value === ''         ? 'bg-surface border-primary text-primary'
                     : opt.value === 'efectivo' ? 'bg-success-soft/60 border-success text-success'
-                    : opt.value === 'fiado'    ? 'bg-warn-soft/60 border-warn text-warn'
+                    : opt.value === 'credito'    ? 'bg-warn-soft/60 border-warn text-warn'
                     : 'bg-primary-soft/60 border-primary text-primary'
                     : 'bg-transparent border-line text-ink-3 hover:border-line-strong hover:text-ink-2'
                 }`}>
@@ -325,8 +325,8 @@ export default function VentasCajero({ session }: Props) {
               </thead>
               <tbody className="divide-y divide-line">
                 {items.map(sale => {
-                  const isFiado = sale.paymentType?.toLowerCase() === 'fiado';
-                  const fiadoInfo = isFiado ? parseFiadoNotes(sale.notes) : null;
+                  const isCredito = sale.paymentType?.toLowerCase() === 'credito';
+                  const creditoInfo = isCredito ? parseCreditoNotes(sale.notes) : null;
                   const isExpanded = expanded === sale.id;
                   const itemNames = (sale.items ?? [])
                     .slice(0, 2)
@@ -352,14 +352,14 @@ export default function VentasCajero({ session }: Props) {
                             {itemNames || '—'}
                             {extraItems > 0 && <span className="text-ink-3"> +{extraItems} más</span>}
                           </span>
-                          {isFiado && fiadoInfo?.[0] && (
-                            <span className="text-warn text-xs">{fiadoInfo[0].replace('Cliente: ', '')}</span>
+                          {isCredito && creditoInfo?.[0] && (
+                            <span className="text-warn text-xs">{creditoInfo[0].replace('Cliente: ', '')}</span>
                           )}
                         </td>
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${paymentBadgeClass(sale.paymentType)}`}>
-                              {isFiado && <span className="material-symbols-outlined text-[11px]">handshake</span>}
+                              {isCredito && <span className="material-symbols-outlined text-[11px]">handshake</span>}
                               {sale.paymentType === 'cash' ? 'Efectivo' : sale.paymentType}
                             </span>
                             <EInvoiceBadge sale={sale} onChanged={() => load(search, dateStart, dateEnd, page)} />
@@ -375,9 +375,9 @@ export default function VentasCajero({ session }: Props) {
                       {isExpanded && (
                         <tr key={`${sale.id}-detail`} className="bg-bg/50">
                           <td colSpan={5} className="px-8 py-3 space-y-2">
-                            {isFiado && fiadoInfo && fiadoInfo.length > 1 && (
+                            {isCredito && creditoInfo && creditoInfo.length > 1 && (
                               <div className="flex flex-wrap gap-2 pb-2 border-b border-line">
-                                {fiadoInfo.map((info, i) => (
+                                {creditoInfo.map((info, i) => (
                                   <span key={i} className="flex items-center gap-1 text-xs text-warn bg-warn-soft/40 px-2.5 py-1 rounded-lg">
                                     <span className="material-symbols-outlined text-[11px]">
                                       {info.startsWith('Cliente:') ? 'person' : info.startsWith('Tel:') ? 'phone' : 'note'}
@@ -451,7 +451,7 @@ export default function VentasCajero({ session }: Props) {
                                             sort_order: 0, details: null, description: null,
                                           };
                                           const rest = (Array.isArray(methods) ? methods : [])
-                                            .filter(m => m.active && m.type !== 'fiado' && m.type !== 'cash');
+                                            .filter(m => m.active && m.type !== 'credito' && m.type !== 'cash');
                                           setRefundPaymentMethods([systemEfectivo, ...rest]);
                                           setReturnRefundMethod('Efectivo');
                                         }).catch(() => {

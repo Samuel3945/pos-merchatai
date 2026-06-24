@@ -19,11 +19,11 @@ type Step = 'payment' | 'invoice_ask' | 'invoice_data';
 interface Props {
   total: number;
   paymentMethods: PaymentMethod[];
-  fiadoEnabled: boolean;
+  creditoEnabled: boolean;
   canConfirmTransfers?: boolean;
   // Plazo de pago por defecto del negocio (días). El backend asigna el
-  // vencimiento real con este mismo valor al crear el fiado.
-  fiadoTermDays?: number;
+  // vencimiento real con este mismo valor al crear el credito.
+  creditoTermDays?: number;
   onConfirm: (payments: SalePayment[], notes?: string) => Promise<void>;
   onCancel: () => void;
   loading: boolean;
@@ -44,7 +44,7 @@ function isTransferType(type: string) {
 
 function methodTheme(type: string, _name: string) {
   if (type === 'cash')   return { soft: 'bg-success-soft', txt: 'text-success', ring: 'ring-success', border: 'border-success' };
-  if (type === 'fiado')  return { soft: 'bg-warn-soft',    txt: 'text-warn',    ring: 'ring-warn',    border: 'border-warn' };
+  if (type === 'credito')  return { soft: 'bg-warn-soft',    txt: 'text-warn',    ring: 'ring-warn',    border: 'border-warn' };
   if (type === 'card')   return { soft: 'bg-info-soft',    txt: 'text-info',    ring: 'ring-info',    border: 'border-info' };
   // 'transfer' (y cualquier otro tipo) → tema primary.
   return { soft: 'bg-primary-soft', txt: 'text-primary', ring: 'ring-primary', border: 'border-primary' };
@@ -54,7 +54,7 @@ function methodTheme(type: string, _name: string) {
 // Modal principal
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function CheckoutModal({ total, paymentMethods, fiadoEnabled, canConfirmTransfers = true, fiadoTermDays = 30, onConfirm, onCancel, loading }: Props) {
+export default function CheckoutModal({ total, paymentMethods, creditoEnabled, canConfirmTransfers = true, creditoTermDays = 30, onConfirm, onCancel, loading }: Props) {
   const availableMethods = useMemo<Method[]>(() => {
     const list: Method[] = [];
     const activeCustom = paymentMethods.filter(pm => pm.active);
@@ -77,20 +77,20 @@ export default function CheckoutModal({ total, paymentMethods, fiadoEnabled, can
     if (!list.find(m => m.name === 'Efectivo' || m.type === 'cash')) {
       list.unshift({ name: 'Efectivo', icon: 'payments', type: 'cash' });
     }
-    if (fiadoEnabled && !list.find(m => m.name === 'Fiado')) {
-      list.push({ name: 'Fiado', icon: 'handshake', type: 'fiado' });
+    if (creditoEnabled && !list.find(m => m.name === 'Credito')) {
+      list.push({ name: 'Credito', icon: 'handshake', type: 'credito' });
     }
     return list;
-  }, [paymentMethods, fiadoEnabled, canConfirmTransfers]);
+  }, [paymentMethods, creditoEnabled, canConfirmTransfers]);
 
   const allowMultiple = availableMethods.length > 1;
 
   const [step, setStep] = useState<Step>('payment');
   const [drafts, setDrafts] = useState<DraftPayment[]>([{ method: 'Efectivo', amount: String(total) }]);
   const [combineMode, setCombineMode] = useState(false);
-  const [fiadoName, setFiadoName] = useState('');
-  const [fiadoPhone, setFiadoPhone] = useState('');
-  const [fiadoWhen, setFiadoWhen] = useState('');
+  const [creditoName, setCreditoName] = useState('');
+  const [creditoPhone, setCreditoPhone] = useState('');
+  const [creditoWhen, setCreditoWhen] = useState('');
   const [error, setError] = useState('');
 
   // Datos de factura
@@ -128,7 +128,7 @@ export default function CheckoutModal({ total, paymentMethods, fiadoEnabled, can
   }, [drafts, total]);
 
   const canConfirm = totals.remaining === 0 && drafts.some(d => computedAmount(d) > 0);
-  const usingFiado = drafts.some(d => d.method === 'Fiado');
+  const usingCredito = drafts.some(d => d.method === 'Credito');
 
   // ── Acciones rápidas ──────────────────────────────────────────────────────
   const pickExact = (m: Method) => {
@@ -157,9 +157,9 @@ export default function CheckoutModal({ total, paymentMethods, fiadoEnabled, can
   const advanceToInvoice = () => {
     setError('');
     if (totals.remaining > 0) { setError(`Faltan ${COP(totals.remaining)} por pagar`); return; }
-    // Validar datos de fiado antes de avanzar para no perderlos en el paso siguiente.
-    if (usingFiado && !fiadoName.trim()) {
-      setError('El nombre del cliente es obligatorio para registrar el fiado');
+    // Validar datos de credito antes de avanzar para no perderlos en el paso siguiente.
+    if (usingCredito && !creditoName.trim()) {
+      setError('El nombre del cliente es obligatorio para registrar el crédito');
       return;
     }
     setStep('invoice_ask');
@@ -167,8 +167,8 @@ export default function CheckoutModal({ total, paymentMethods, fiadoEnabled, can
 
   const submit = async (invoice: boolean) => {
     setError(''); setInvErr('');
-    if (usingFiado && !fiadoName.trim()) {
-      setError('El nombre del cliente es obligatorio para registrar el fiado');
+    if (usingCredito && !creditoName.trim()) {
+      setError('El nombre del cliente es obligatorio para registrar el crédito');
       return;
     }
     if (invoice) {
@@ -194,15 +194,15 @@ export default function CheckoutModal({ total, paymentMethods, fiadoEnabled, can
       }
     }
 
-    // Componer notes (fiado + factura)
+    // Componer notes (credito + factura)
     const noteParts: string[] = [];
-    if (usingFiado) {
-      const fiadoParts: string[] = [];
-      if (fiadoName.trim())  fiadoParts.push(`Nombre:${fiadoName.trim()}`);
-      const phone = fiadoPhone.replace(/\D/g, '');
-      if (phone)             fiadoParts.push(`Tel:${phone}`);
-      if (fiadoWhen.trim())  fiadoParts.push(`Pago:${fiadoWhen.trim()}`);
-      if (fiadoParts.length) noteParts.push(`[FIADO] ${fiadoParts.join(' | ')}`);
+    if (usingCredito) {
+      const creditoParts: string[] = [];
+      if (creditoName.trim())  creditoParts.push(`Nombre:${creditoName.trim()}`);
+      const phone = creditoPhone.replace(/\D/g, '');
+      if (phone)             creditoParts.push(`Tel:${phone}`);
+      if (creditoWhen.trim())  creditoParts.push(`Pago:${creditoWhen.trim()}`);
+      if (creditoParts.length) noteParts.push(`[CREDITO] ${creditoParts.join(' | ')}`);
     }
     if (invoice) {
       const wa = invWhats.replace(/\D/g, '');
@@ -274,18 +274,18 @@ export default function CheckoutModal({ total, paymentMethods, fiadoEnabled, can
               updateDraft={updateDraft}
               removeDraft={removeDraft}
               addDraft={addDraft}
-              fiadoName={fiadoName} setFiadoName={setFiadoName}
-              fiadoPhone={fiadoPhone} setFiadoPhone={setFiadoPhone}
-              fiadoWhen={fiadoWhen} setFiadoWhen={setFiadoWhen}
-              usingFiado={usingFiado}
-              fiadoTermDays={fiadoTermDays}
+              creditoName={creditoName} setCreditoName={setCreditoName}
+              creditoPhone={creditoPhone} setCreditoPhone={setCreditoPhone}
+              creditoWhen={creditoWhen} setCreditoWhen={setCreditoWhen}
+              usingCredito={usingCredito}
+              creditoTermDays={creditoTermDays}
             />
           )}
 
           {step === 'invoice_ask' && (
             <InvoiceAskStep
               total={total}
-              usingFiado={usingFiado}
+              usingCredito={usingCredito}
               onYes={() => setStep('invoice_data')}
               onNo={() => submit(false)}
               loading={loading}
@@ -316,7 +316,7 @@ export default function CheckoutModal({ total, paymentMethods, fiadoEnabled, can
               <button onClick={advanceToInvoice} disabled={!canConfirm || loading}
                 className="h-14 bg-primary hover:bg-primary-ink disabled:opacity-45 disabled:cursor-not-allowed text-white font-bold text-base rounded-2xl transition-colors active:scale-[0.98] flex items-center justify-center gap-2">
                 <span className="material-symbols-outlined">arrow_forward</span>
-                {loading ? 'Procesando…' : usingFiado ? 'Registrar fiado' : `Cobrar ${COP(total)}`}
+                {loading ? 'Procesando…' : usingCredito ? 'Registrar crédito' : `Cobrar ${COP(total)}`}
               </button>
               <button onClick={onCancel}
                 className="h-14 px-4 bg-surface-2 hover:bg-surface-3 border border-line text-ink-2 font-semibold rounded-2xl transition-colors">
@@ -348,31 +348,31 @@ interface PaymentStepProps {
   updateDraft: (idx: number, patch: Partial<DraftPayment>) => void;
   removeDraft: (idx: number) => void;
   addDraft: (methodName?: string) => void;
-  fiadoName: string; setFiadoName: (s: string) => void;
-  fiadoPhone: string; setFiadoPhone: (s: string) => void;
-  fiadoWhen: string; setFiadoWhen: (s: string) => void;
-  usingFiado: boolean;
-  fiadoTermDays: number;
+  creditoName: string; setCreditoName: (s: string) => void;
+  creditoPhone: string; setCreditoPhone: (s: string) => void;
+  creditoWhen: string; setCreditoWhen: (s: string) => void;
+  usingCredito: boolean;
+  creditoTermDays: number;
 }
 
 function PaymentStep(props: PaymentStepProps) {
   const {
     total, availableMethods, drafts, setDrafts, combineMode, setCombineMode, allowMultiple,
     totals, pickExact, pickCashReceived, updateDraft, removeDraft,
-    fiadoName, setFiadoName, fiadoPhone, setFiadoPhone, fiadoWhen, setFiadoWhen, usingFiado,
-    fiadoTermDays,
+    creditoName, setCreditoName, creditoPhone, setCreditoPhone, creditoWhen, setCreditoWhen, usingCredito,
+    creditoTermDays,
   } = props;
 
   // Ordenar para que efectivo aparezca primero (es el más usado en tienda).
   const ordered = [...availableMethods].sort((a, b) => {
-    const score = (m: Method) => m.type === 'cash' ? 0 : m.type === 'fiado' ? 9 : 5;
+    const score = (m: Method) => m.type === 'cash' ? 0 : m.type === 'credito' ? 9 : 5;
     return score(a) - score(b);
   });
 
   const isSinglePayment = drafts.length === 1 && !combineMode;
   const primary = drafts[0];
   const primaryIsCash = primary?.method === 'Efectivo';
-  const primaryIsFiado = primary?.method === 'Fiado';
+  const primaryIsCredito = primary?.method === 'Credito';
   const primaryAmount = parseFloat(primary?.amount || '0') || 0;
 
   return (
@@ -462,8 +462,8 @@ function PaymentStep(props: PaymentStepProps) {
         </div>
       )}
 
-      {/* Modo simple — no efectivo y no fiado: opcional referencia */}
-      {isSinglePayment && !primaryIsCash && !primaryIsFiado && (
+      {/* Modo simple — no efectivo y no credito: opcional referencia */}
+      {isSinglePayment && !primaryIsCash && !primaryIsCredito && (
         <div className="bg-surface-2 border border-primary/40 rounded-xl p-3">
           <input type="text" value={primary.reference || ''}
             onChange={e => updateDraft(0, { reference: e.target.value })}
@@ -472,13 +472,13 @@ function PaymentStep(props: PaymentStepProps) {
         </div>
       )}
 
-      {/* Modo simple — fiado: datos del cliente (nombre + teléfono separados) */}
-      {isSinglePayment && primaryIsFiado && (
-        <FiadoFields
-          name={fiadoName} setName={setFiadoName}
-          phone={fiadoPhone} setPhone={setFiadoPhone}
-          when={fiadoWhen} setWhen={setFiadoWhen}
-          termDays={fiadoTermDays}
+      {/* Modo simple — credito: datos del cliente (nombre + teléfono separados) */}
+      {isSinglePayment && primaryIsCredito && (
+        <CreditoFields
+          name={creditoName} setName={setCreditoName}
+          phone={creditoPhone} setPhone={setCreditoPhone}
+          when={creditoWhen} setWhen={setCreditoWhen}
+          termDays={creditoTermDays}
         />
       )}
 
@@ -530,7 +530,7 @@ function PaymentStep(props: PaymentStepProps) {
           <div className="space-y-2">
             {drafts.map((d, i) => {
               const isCash = d.method === 'Efectivo';
-              const isFiado = d.method === 'Fiado';
+              const isCredito = d.method === 'Credito';
               const meta = availableMethods.find(m => m.name === d.method);
               const t = methodTheme(meta?.type || 'other', d.method);
               return (
@@ -554,14 +554,14 @@ function PaymentStep(props: PaymentStepProps) {
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-3 text-sm">$</span>
                     <input type="number" value={d.amount}
                       onChange={e => updateDraft(i, { amount: e.target.value })}
-                      placeholder={isFiado ? 'Monto fiado' : 'Monto'}
+                      placeholder={isCredito ? 'Monto crédito' : 'Monto'}
                       className={`w-full pl-7 pr-3 py-2.5 rounded-lg border text-base font-bold text-center bg-surface tnum ${
                         isCash ? 'border-success text-success'
-                        : isFiado ? 'border-warn text-warn'
+                        : isCredito ? 'border-warn text-warn'
                         : 'border-primary text-primary'
                       }`} />
                   </div>
-                  {!isCash && !isFiado && (
+                  {!isCash && !isCredito && (
                     <input type="text" value={d.reference || ''}
                       onChange={e => updateDraft(i, { reference: e.target.value })}
                       placeholder="Ref. de transferencia (opcional)"
@@ -572,12 +572,12 @@ function PaymentStep(props: PaymentStepProps) {
             })}
           </div>
 
-          {usingFiado && (
-            <FiadoFields
-              name={fiadoName} setName={setFiadoName}
-              phone={fiadoPhone} setPhone={setFiadoPhone}
-              when={fiadoWhen} setWhen={setFiadoWhen}
-              termDays={fiadoTermDays}
+          {usingCredito && (
+            <CreditoFields
+              name={creditoName} setName={setCreditoName}
+              phone={creditoPhone} setPhone={setCreditoPhone}
+              when={creditoWhen} setWhen={setCreditoWhen}
+              termDays={creditoTermDays}
             />
           )}
         </div>
@@ -586,7 +586,7 @@ function PaymentStep(props: PaymentStepProps) {
   );
 }
 
-function FiadoFields({
+function CreditoFields({
   name, setName, phone, setPhone, when, setWhen, termDays,
 }: {
   name: string; setName: (s: string) => void;
@@ -602,7 +602,7 @@ function FiadoFields({
   }).format(dueDate);
   return (
     <div className="bg-warn-soft border border-warn/30 rounded-xl p-3 space-y-2">
-      <p className="text-warn text-[11px] font-bold uppercase tracking-widest">Datos del cliente (fiado)</p>
+      <p className="text-warn text-[11px] font-bold uppercase tracking-widest">Datos del cliente (crédito)</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div>
           <span className="block text-[10px] text-warn/80 font-bold uppercase tracking-wider mb-1">Nombre <span className="text-danger">*</span></span>
@@ -636,7 +636,7 @@ function FiadoFields({
 // Paso 2 — ¿Desea factura?
 // ─────────────────────────────────────────────────────────────────────────────
 
-function InvoiceAskStep({ total, usingFiado, onYes, onNo, loading }: { total: number; usingFiado: boolean; onYes: () => void; onNo: () => void; loading: boolean }) {
+function InvoiceAskStep({ total, usingCredito, onYes, onNo, loading }: { total: number; usingCredito: boolean; onYes: () => void; onNo: () => void; loading: boolean }) {
   const noBtnRef = useRef<HTMLButtonElement>(null);
   useEffect(() => { noBtnRef.current?.focus(); }, []);
 
@@ -648,8 +648,8 @@ function InvoiceAskStep({ total, usingFiado, onYes, onNo, loading }: { total: nu
         </div>
         <h3 className="font-extrabold text-2xl">¿Desea factura?</h3>
         <p className="text-ink-3 text-sm mt-1">
-          {usingFiado
-            ? <>Venta registrada por <span className="text-warn font-bold">{COP(total)}</span> · incluye fiado</>
+          {usingCredito
+            ? <>Venta registrada por <span className="text-warn font-bold">{COP(total)}</span> · incluye crédito</>
             : <>Cobro completado por <span className="text-success font-bold">{COP(total)}</span></>}
         </p>
       </div>
