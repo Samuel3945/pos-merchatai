@@ -469,8 +469,13 @@ export const api = {
   },
 
   customers: {
-    list: (search?: string) =>
-      req<Customer[]>(search ? `/pos/customers?search=${encodeURIComponent(search)}` : '/pos/customers'),
+    // GET /pos/customers returns { items: Customer[] } — the same envelope as
+    // /pos/sales. Unwrap here so callers receive a bare array. The old
+    // req<Customer[]> cast was a lie (req returns the body verbatim, no
+    // unwrap), so ClientesCajero's Array.isArray guard silently fell back to []
+    // and the customer list always rendered empty.
+    list: (search?: string): Promise<Customer[]> =>
+      req<{ items: Customer[] }>(search ? `/pos/customers?search=${encodeURIComponent(search)}` : '/pos/customers').then(r => r.items ?? []),
     create: (data: { name: string; documentId?: string; whatsapp?: string; email?: string; address?: string; notes?: string }) =>
       req<Customer>('/pos/customers', {
         method: 'POST',
