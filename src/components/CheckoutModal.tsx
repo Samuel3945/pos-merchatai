@@ -52,6 +52,15 @@ function isTransferType(type: string) {
   return type === 'transfer' || type === 'nequi' || type === 'llave';
 }
 
+// Fiado/credito is ALWAYS shown as a single synthetic tile (handshake, type
+// 'credito') driven by the creditoEnabled flag. Any configured method that is
+// really credito — the seeded "Crédito" (type 'credit'), an accented name, or
+// 'fiado' — is filtered out so it never shows up as a second, transfer-like tile.
+function isCreditoLike(pm: { type: string; name: string }): boolean {
+  if (pm.type === 'credito' || pm.type === 'credit') return true;
+  return /cr[ée]dito|fiado/i.test(pm.name);
+}
+
 function methodTheme(type: string, _name: string) {
   if (type === 'cash')   return { soft: 'bg-success-soft', txt: 'text-success', ring: 'ring-success', border: 'border-success' };
   if (type === 'credito')  return { soft: 'bg-warn-soft',    txt: 'text-warn',    ring: 'ring-warn',    border: 'border-warn' };
@@ -68,7 +77,7 @@ export default function CheckoutModal({ total, paymentMethods, creditoEnabled, e
   const isCorrection = mode === 'correction';
   const availableMethods = useMemo<Method[]>(() => {
     const list: Method[] = [];
-    const activeCustom = paymentMethods.filter(pm => pm.active);
+    const activeCustom = paymentMethods.filter(pm => pm.active && !isCreditoLike(pm));
     for (const pm of activeCustom) {
       // Cuentas de transferencia: una por método, con su número de cuenta debajo.
       // Solo se muestran si el cajero tiene permiso para confirmarlas.
@@ -88,7 +97,7 @@ export default function CheckoutModal({ total, paymentMethods, creditoEnabled, e
     if (!list.find(m => m.name === 'Efectivo' || m.type === 'cash')) {
       list.unshift({ name: 'Efectivo', icon: 'payments', type: 'cash' });
     }
-    if (creditoEnabled && !list.find(m => m.name === 'Credito')) {
+    if (creditoEnabled && !list.find(m => m.type === 'credito')) {
       list.push({ name: 'Credito', icon: 'handshake', type: 'credito' });
     }
     return list;
