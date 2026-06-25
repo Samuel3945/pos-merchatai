@@ -13,7 +13,7 @@ const LIMIT = 50;
 function paymentBadgeClass(pt: string) {
   const p = (pt || '').toLowerCase();
   if (p === 'efectivo' || p === 'cash') return 'bg-success-soft text-success';
-  if (p === 'credito')                    return 'bg-warn-soft text-warn';
+  if (/cr[ée]dito|fiado/.test(p))         return 'bg-warn-soft text-warn';
   if (p.includes('transfer') || p.includes('nequi') || p.includes('daviplata') ||
       p.includes('llave') || p.includes('banco'))
     return 'bg-primary-soft text-primary';
@@ -313,7 +313,7 @@ export default function VentasCajero({ session }: Props) {
               </thead>
               <tbody className="divide-y divide-line">
                 {items.map(sale => {
-                  const isCredito = sale.paymentType?.toLowerCase() === 'credito';
+                  const isCredito = /cr[ée]dito|fiado/i.test(sale.paymentType ?? '');
                   const creditoInfo = isCredito ? parseCreditoNotes(sale.notes) : null;
                   const isExpanded = expanded === sale.id;
                   const itemNames = (sale.items ?? [])
