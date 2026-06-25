@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PaymentMethod, SalePayment } from '../services/api';
-import { isCreditoMethod, isCreditoName } from '../lib/payment';
 
-const COP = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('en-US')}`;
+const COP = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('es-CO')}`;
 
 // Denominaciones más comunes que un cliente entrega en Colombia.
 const QUICK_BILLS = [2000, 5000, 10000, 20000, 50000, 100000];
@@ -46,11 +45,9 @@ function isTransferType(type: string) {
   return type === 'transfer' || type === 'nequi' || type === 'llave';
 }
 
-function methodTheme(type: string, name: string) {
+function methodTheme(type: string, _name: string) {
   if (type === 'cash')   return { soft: 'bg-success-soft', txt: 'text-success', ring: 'ring-success', border: 'border-success' };
-  // Credit can arrive as type 'credit' (server) or 'credito' (this client), named
-  // 'Crédito' or 'Credito' — match all so it is styled as credit, not transfer.
-  if (isCreditoMethod({ type, name }))  return { soft: 'bg-warn-soft',    txt: 'text-warn',    ring: 'ring-warn',    border: 'border-warn' };
+  if (type === 'credito')  return { soft: 'bg-warn-soft',    txt: 'text-warn',    ring: 'ring-warn',    border: 'border-warn' };
   if (type === 'card')   return { soft: 'bg-info-soft',    txt: 'text-info',    ring: 'ring-info',    border: 'border-info' };
   // 'transfer' (y cualquier otro tipo) → tema primary.
   return { soft: 'bg-primary-soft', txt: 'text-primary', ring: 'ring-primary', border: 'border-primary' };
@@ -83,10 +80,7 @@ export default function CheckoutModal({ total, paymentMethods, creditoEnabled, e
     if (!list.find(m => m.name === 'Efectivo' || m.type === 'cash')) {
       list.unshift({ name: 'Efectivo', icon: 'payments', type: 'cash' });
     }
-    // Only inject the synthetic credit option if the org hasn't already defined a
-    // credit method (the server seeds 'Crédito'/type 'credit') — otherwise the
-    // cashier would see two credit buttons, one of them mis-detected.
-    if (creditoEnabled && !list.find(m => isCreditoMethod(m))) {
+    if (creditoEnabled && !list.find(m => m.name === 'Credito')) {
       list.push({ name: 'Credito', icon: 'handshake', type: 'credito' });
     }
     return list;
@@ -137,7 +131,7 @@ export default function CheckoutModal({ total, paymentMethods, creditoEnabled, e
   }, [drafts, total]);
 
   const canConfirm = totals.remaining === 0 && drafts.some(d => computedAmount(d) > 0);
-  const usingCredito = drafts.some(d => isCreditoName(d.method));
+  const usingCredito = drafts.some(d => d.method === 'Credito');
 
   // ── Acciones rápidas ──────────────────────────────────────────────────────
   const pickExact = (m: Method) => {
@@ -377,14 +371,14 @@ function PaymentStep(props: PaymentStepProps) {
 
   // Ordenar para que efectivo aparezca primero (es el más usado en tienda).
   const ordered = [...availableMethods].sort((a, b) => {
-    const score = (m: Method) => m.type === 'cash' ? 0 : isCreditoMethod(m) ? 9 : 5;
+    const score = (m: Method) => m.type === 'cash' ? 0 : m.type === 'credito' ? 9 : 5;
     return score(a) - score(b);
   });
 
   const isSinglePayment = drafts.length === 1 && !combineMode;
   const primary = drafts[0];
   const primaryIsCash = primary?.method === 'Efectivo';
-  const primaryIsCredito = isCreditoName(primary?.method);
+  const primaryIsCredito = primary?.method === 'Credito';
   const primaryAmount = parseFloat(primary?.amount || '0') || 0;
 
   return (
@@ -542,7 +536,7 @@ function PaymentStep(props: PaymentStepProps) {
           <div className="space-y-2">
             {drafts.map((d, i) => {
               const isCash = d.method === 'Efectivo';
-              const isCredito = isCreditoName(d.method);
+              const isCredito = d.method === 'Credito';
               const meta = availableMethods.find(m => m.name === d.method);
               const t = methodTheme(meta?.type || 'other', d.method);
               return (

@@ -10,9 +10,8 @@ import {
   listParked, parkCart, removeParked, renameParked, nextClientLabel, ParkedCart,
 } from '../lib/parkedCarts';
 import { useLowStockThreshold } from '../lib/useThresholds';
-import { uuidv4 } from '../lib/uuid';
 
-const cop = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('en-US')}`;
+const cop = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('es-CO')}`;
 
 interface CartItem {
   productId: string;
@@ -243,22 +242,9 @@ export default function Pos({ session, onLogout }: Props) {
   useEffect(() => {
     const up = () => { setOnline(true); triggerSync(); };
     const down = () => setOnline(false);
-    // Volver a la app (cambiar de pestaña/app y volver, o re-enfocar la ventana)
-    // drena la cola y refresca — antes esto sólo pasaba al re-montar (re-login),
-    // por eso las ventas "no se reflejaban" hasta salir y entrar del perfil.
-    const onForeground = () => {
-      if (document.visibilityState === 'visible') { triggerSync(); loadFromServer(); }
-    };
     window.addEventListener('online', up);
     window.addEventListener('offline', down);
-    document.addEventListener('visibilitychange', onForeground);
-    window.addEventListener('focus', onForeground);
-    return () => {
-      window.removeEventListener('online', up);
-      window.removeEventListener('offline', down);
-      document.removeEventListener('visibilitychange', onForeground);
-      window.removeEventListener('focus', onForeground);
-    };
+    return () => { window.removeEventListener('online', up); window.removeEventListener('offline', down); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -358,7 +344,7 @@ export default function Pos({ session, onLogout }: Props) {
         const primary = sale.payments && sale.payments.length === 1
           ? sale.payments[0].method
           : (sale.paymentType || 'Efectivo');
-        await api.pos.sale(sale.items, primary, sale.notes, sale.payments, session.cash.cashierId, sale.sale_idempotency_key);
+        await api.pos.sale(sale.items, primary, sale.notes, sale.payments, session.cash.cashierId);
       },
       () => { /* removeFromQueue is done inside syncQueue */ },
       (localId, err) => { errs[localId] = err; },
@@ -537,15 +523,11 @@ export default function Pos({ session, onLogout }: Props) {
     setLoading(true); setError('');
     const saleItems = cart.map(i => ({ productId: i.productId, qty: i.qty }));
     const primary = payments.length === 1 ? payments[0].method : 'Mixto';
-    // One idempotency key per checkout. Sent online now AND stored with the sale
-    // if it falls back to the offline queue, so a later drain converges to the
-    // same server row instead of duplicating it.
-    const idempotencyKey = uuidv4();
 
     // Estrategia: siempre intentamos enviar al backend primero. Solo encolamos localmente si
     // realmente no hay red (navigator está offline) o si el fetch falla por TypeError de red.
     try {
-      await api.pos.sale(saleItems, primary, notes, payments, session.cash.cashierId, idempotencyKey);
+      await api.pos.sale(saleItems, primary, notes, payments, session.cash.cashierId);
       loadFromServer();
       const change = payments.reduce((s, p) => s + (p.changeGiven || 0), 0);
       setCart([]); setShowCart(false); setShowCheckout(false);
@@ -561,7 +543,7 @@ export default function Pos({ session, onLogout }: Props) {
       // así que no lo usamos para decidir si encolar — solo errores reales de red.
       const isNetworkErr = e instanceof TypeError;
       if (isNetworkErr) {
-        await queueSale({ items: saleItems, paymentType: primary, payments, notes, total, sale_idempotency_key: idempotencyKey });
+        await queueSale({ items: saleItems, paymentType: primary, payments, notes, total });
         await refreshQueueCount();
         setOnline(false);
         setCart([]); setShowCart(false); setShowCheckout(false);
