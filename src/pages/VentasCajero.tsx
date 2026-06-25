@@ -112,6 +112,8 @@ export default function VentasCajero({ session }: Props) {
   const [correctSale, setCorrectSale] = useState<Sale | null>(null);
   const [correctMethods, setCorrectMethods] = useState<PaymentMethod[]>([]);
   const [correctCanConfirmTransfers, setCorrectCanConfirmTransfers] = useState(true);
+  const [correctCreditoEnabled, setCorrectCreditoEnabled] = useState(false);
+  const [correctCreditoTermDays, setCorrectCreditoTermDays] = useState(30);
   const [correctLoading, setCorrectLoading] = useState(false);
 
   useEffect(() => {
@@ -171,23 +173,29 @@ export default function VentasCajero({ session }: Props) {
 
   const openCorrection = (sale: Sale) => {
     setCorrectSale(sale);
-    // Load the catalog + transfer-confirm permission so the checkout shows the
-    // same method tiles the cashier uses to charge. Credito is intentionally
-    // left out — re-splitting into credito would desync its ledger.
+    // Load the catalog + transfer-confirm permission + fiado settings so the
+    // checkout shows the same tiles the cashier uses to charge. Correcting INTO
+    // fiado books the debt (backend createCredito), so the modal captures the
+    // client; the single fiado tile is the synthetic one.
     api.pos.me().then(me => {
       setCorrectMethods(Array.isArray(me?.paymentMethods) ? me.paymentMethods : []);
       setCorrectCanConfirmTransfers(me?.features?.canConfirmTransfers !== false);
+      setCorrectCreditoEnabled(!!me?.features?.creditoEnabled);
+      setCorrectCreditoTermDays(
+        typeof me?.store?.creditoTermDays === 'number' ? me.store.creditoTermDays : 30,
+      );
     }).catch(() => {
       setCorrectMethods([]);
       setCorrectCanConfirmTransfers(true);
+      setCorrectCreditoEnabled(false);
     });
   };
 
-  const submitCorrection = async (payments: SalePayment[]) => {
+  const submitCorrection = async (payments: SalePayment[], notes?: string) => {
     if (!correctSale) return;
     setCorrectLoading(true);
     try {
-      await api.sales.resplit(correctSale.id, payments);
+      await api.sales.resplit(correctSale.id, payments, notes);
       setCorrectSale(null);
       load(search, dateStart, dateEnd, page);
     } finally {
@@ -685,7 +693,8 @@ export default function VentasCajero({ session }: Props) {
             changeGiven: Number(p.changeGiven ?? 0),
           }))}
           paymentMethods={correctMethods}
-          creditoEnabled={false}
+          creditoEnabled={correctCreditoEnabled}
+          creditoTermDays={correctCreditoTermDays}
           canConfirmTransfers={correctCanConfirmTransfers}
           loading={correctLoading}
           onConfirm={submitCorrection}

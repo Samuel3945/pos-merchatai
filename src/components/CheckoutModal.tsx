@@ -233,12 +233,27 @@ export default function CheckoutModal({ total, paymentMethods, creditoEnabled, e
     return payments;
   };
 
-  // Correction: apply the new split to an existing sale. No invoice step and no
-  // notes — the sale's notes (credito/factura data) must stay as they are.
+  // Correction: apply the new split to an existing sale. No invoice step. If the
+  // correction turns part of the sale into fiado, the customer becomes a debtor,
+  // so we require their name and pass the [CREDITO] note so the backend books the
+  // debt. Otherwise notes stay untouched.
   const submitCorrection = async () => {
     setError('');
     if (totals.remaining > 0) { setError(`Faltan ${COP(totals.remaining)} por cubrir el total`); return; }
-    try { await onConfirm(buildPayments(), undefined); }
+    if (usingCredito && !creditoName.trim()) {
+      setError('El nombre del cliente es obligatorio para registrar el crédito');
+      return;
+    }
+    let notes: string | undefined;
+    if (usingCredito) {
+      const parts: string[] = [];
+      if (creditoName.trim()) parts.push(`Nombre:${creditoName.trim()}`);
+      const phone = creditoPhone.replace(/\D/g, '');
+      if (phone) parts.push(`Tel:${phone}`);
+      if (creditoWhen.trim()) parts.push(`Pago:${creditoWhen.trim()}`);
+      if (parts.length) notes = `[CREDITO] ${parts.join(' | ')}`;
+    }
+    try { await onConfirm(buildPayments(), notes); }
     catch (e: any) { setError(e?.message || 'No se pudo guardar la corrección'); }
   };
 
