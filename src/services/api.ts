@@ -262,7 +262,7 @@ export interface MeResponse {
     locationId:   string | null;
   };
   store: { id: string; name: string; phone: string; type: string; offering: string; creditoTermDays?: number };
-  features: { creditoEnabled: boolean; sellByWeight: boolean; sellDigital: boolean; wholesale: boolean; canConfirmTransfers: boolean; allowOversell?: boolean };
+  features: { creditoEnabled: boolean; sellByWeight: boolean; sellDigital: boolean; wholesale: boolean; canConfirmTransfers: boolean; allowOversell?: boolean; einvoiceEnabled?: boolean };
   paymentMethods: PaymentMethod[];
   cashiers:       CashierLite[];
   products:       Product[];
@@ -369,10 +369,21 @@ export const api = {
       notes?: string,
       payments?: SalePayment[],
       cashierId?: string | null,
+      // Exactly-once key: the server dedupes by sale_idempotency_key, so a retry
+      // (e.g. a dropped response, or a queued sale drained twice) never creates a
+      // second sale. Omitted for legacy callers → server treats it as no-dedupe.
+      saleIdempotencyKey?: string | null,
     ) =>
       req<{ id: string; total: number; items: number }>('/pos/sale', {
         method: 'POST',
-        body: JSON.stringify({ items, paymentType, notes, payments, cashierId }),
+        body: JSON.stringify({
+          items,
+          paymentType,
+          notes,
+          payments,
+          cashierId,
+          sale_idempotency_key: saleIdempotencyKey ?? undefined,
+        }),
       }),
   },
 

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PaymentMethod, SalePayment } from '../services/api';
+import { isCreditoMethod, isCreditoName } from '../lib/payment';
 
-const COP = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('es-CO')}`;
+const COP = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('en-US')}`;
 
 // Denominaciones más comunes que un cliente entrega en Colombia.
 const QUICK_BILLS = [2000, 5000, 10000, 20000, 50000, 100000];
@@ -20,6 +21,9 @@ interface Props {
   total: number;
   paymentMethods: PaymentMethod[];
   creditoEnabled: boolean;
+  // Operator-gated DIAN e-invoicing. When false the checkout never shows the
+  // "¿Desea factura?" step — the sale closes as a normal POS sale.
+  einvoiceEnabled?: boolean;
   canConfirmTransfers?: boolean;
   // Plazo de pago por defecto del negocio (días). El backend asigna el
   // vencimiento real con este mismo valor al crear el credito.
@@ -42,9 +46,11 @@ function isTransferType(type: string) {
   return type === 'transfer' || type === 'nequi' || type === 'llave';
 }
 
-function methodTheme(type: string, _name: string) {
+function methodTheme(type: string, name: string) {
   if (type === 'cash')   return { soft: 'bg-success-soft', txt: 'text-success', ring: 'ring-success', border: 'border-success' };
-  if (type === 'credito')  return { soft: 'bg-warn-soft',    txt: 'text-warn',    ring: 'ring-warn',    border: 'border-warn' };
+  // Credit can arrive as type 'credit' (server) or 'credito' (this client), named
+  // 'Crédito' or 'Credito' — match all so it is styled as credit, not transfer.
+  if (isCreditoMethod({ type, name }))  return { soft: 'bg-warn-soft',    txt: 'text-warn',    ring: 'ring-warn',    border: 'border-warn' };
   if (type === 'card')   return { soft: 'bg-info-soft',    txt: 'text-info',    ring: 'ring-info',    border: 'border-info' };
   // 'transfer' (y cualquier otro tipo) → tema primary.
   return { soft: 'bg-primary-soft', txt: 'text-primary', ring: 'ring-primary', border: 'border-primary' };
@@ -54,7 +60,7 @@ function methodTheme(type: string, _name: string) {
 // Modal principal
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function CheckoutModal({ total, paymentMethods, creditoEnabled, canConfirmTransfers = true, creditoTermDays = 30, onConfirm, onCancel, loading }: Props) {
+export default function CheckoutModal({ total, paymentMethods, creditoEnabled, einvoiceEnabled = false, canConfirmTransfers = true, creditoTermDays = 30, onConfirm, onCancel, loading }: Props) {
   const availableMethods = useMemo<Method[]>(() => {
     const list: Method[] = [];
     const activeCustom = paymentMethods.filter(pm => pm.active);
@@ -77,7 +83,10 @@ export default function CheckoutModal({ total, paymentMethods, creditoEnabled, c
     if (!list.find(m => m.name === 'Efectivo' || m.type === 'cash')) {
       list.unshift({ name: 'Efectivo', icon: 'payments', type: 'cash' });
     }
-    if (creditoEnabled && !list.find(m => m.name === 'Credito')) {
+    // Only inject the synthetic credit option if the org hasn't already defined a
+    // credit method (the server seeds 'Crédito'/type 'credit') — otherwise the
+    // cashier would see two credit buttons, one of them mis-detected.
+    if (creditoEnabled && !list.find(m => isCreditoMethod(m))) {
       list.push({ name: 'Credito', icon: 'handshake', type: 'credito' });
     }
     return list;
@@ -128,7 +137,7 @@ export default function CheckoutModal({ total, paymentMethods, creditoEnabled, c
   }, [drafts, total]);
 
   const canConfirm = totals.remaining === 0 && drafts.some(d => computedAmount(d) > 0);
-  const usingCredito = drafts.some(d => d.method === 'Credito');
+  const usingCredito = drafts.some(d => isCreditoName(d.method));
 
   // ── Acciones rápidas ──────────────────────────────────────────────────────
   const pickExact = (m: Method) => {
@@ -162,6 +171,9 @@ export default function CheckoutModal({ total, paymentMethods, creditoEnabled, c
       setError('El nombre del cliente es obligatorio para registrar el crédito');
       return;
     }
+    // E-invoicing hidden for this org → skip the "¿Desea factura?" step and close
+    // the sale as a normal POS sale (final consumer).
+    if (!einvoiceEnabled) { void submit(false); return; }
     setStep('invoice_ask');
   };
 
@@ -365,14 +377,14 @@ function PaymentStep(props: PaymentStepProps) {
 
   // Ordenar para que efectivo aparezca primero (es el más usado en tienda).
   const ordered = [...availableMethods].sort((a, b) => {
-    const score = (m: Method) => m.type === 'cash' ? 0 : m.type === 'credito' ? 9 : 5;
+    const score = (m: Method) => m.type === 'cash' ? 0 : isCreditoMethod(m) ? 9 : 5;
     return score(a) - score(b);
   });
 
   const isSinglePayment = drafts.length === 1 && !combineMode;
   const primary = drafts[0];
   const primaryIsCash = primary?.method === 'Efectivo';
-  const primaryIsCredito = primary?.method === 'Credito';
+  const primaryIsCredito = isCreditoName(primary?.method);
   const primaryAmount = parseFloat(primary?.amount || '0') || 0;
 
   return (
@@ -530,7 +542,7 @@ function PaymentStep(props: PaymentStepProps) {
           <div className="space-y-2">
             {drafts.map((d, i) => {
               const isCash = d.method === 'Efectivo';
-              const isCredito = d.method === 'Credito';
+              const isCredito = isCreditoName(d.method);
               const meta = availableMethods.find(m => m.name === d.method);
               const t = methodTheme(meta?.type || 'other', d.method);
               return (
