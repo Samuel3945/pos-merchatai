@@ -27,6 +27,13 @@ interface Props {
   // Plazo de pago por defecto del negocio (días). El backend asigna el
   // vencimiento real con este mismo valor al crear el credito.
   creditoTermDays?: number;
+  // 'sale' (default): full charge flow, ends in the invoice question.
+  // 'correction': re-enter the method split of an EXISTING sale. Same total,
+  // no invoice step, no credito (correcting a credito would desync its ledger).
+  // The split is pre-loaded from `initialPayments` and confirming calls
+  // onConfirm directly with the new breakdown.
+  mode?: 'sale' | 'correction';
+  initialPayments?: SalePayment[];
   onConfirm: (payments: SalePayment[], notes?: string) => Promise<void>;
   onCancel: () => void;
   loading: boolean;
@@ -57,7 +64,8 @@ function methodTheme(type: string, _name: string) {
 // Modal principal
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function CheckoutModal({ total, paymentMethods, creditoEnabled, einvoiceEnabled = false, canConfirmTransfers = true, creditoTermDays = 30, onConfirm, onCancel, loading }: Props) {
+export default function CheckoutModal({ total, paymentMethods, creditoEnabled, einvoiceEnabled = false, canConfirmTransfers = true, creditoTermDays = 30, mode = 'sale', initialPayments, onConfirm, onCancel, loading }: Props) {
+  const isCorrection = mode === 'correction';
   const availableMethods = useMemo<Method[]>(() => {
     const list: Method[] = [];
     const activeCustom = paymentMethods.filter(pm => pm.active);
@@ -89,8 +97,28 @@ export default function CheckoutModal({ total, paymentMethods, creditoEnabled, e
   const allowMultiple = availableMethods.length > 1;
 
   const [step, setStep] = useState<Step>('payment');
-  const [drafts, setDrafts] = useState<DraftPayment[]>([{ method: 'Efectivo', amount: String(total) }]);
-  const [combineMode, setCombineMode] = useState(false);
+  const [drafts, setDrafts] = useState<DraftPayment[]>(() => {
+    // In correction mode, start from the sale's CURRENT split so the cashier
+    // edits what's there instead of re-typing from scratch.
+    if (isCorrection && initialPayments && initialPayments.length > 0) {
+      return initialPayments.map(p => ({
+        method: p.method,
+        // A cash draft holds what the customer HANDED IN (applied + change), so
+        // the change calculator reconstructs the same vuelto for rows the cashier
+        // leaves untouched.
+        amount: String(
+          p.method === 'Efectivo'
+            ? Number(p.amount) + Number(p.changeGiven ?? 0)
+            : p.amount,
+        ),
+        reference: p.reference ?? undefined,
+      }));
+    }
+    return [{ method: 'Efectivo', amount: String(total) }];
+  });
+  const [combineMode, setCombineMode] = useState(
+    isCorrection && (initialPayments?.length ?? 0) > 1,
+  );
   const [creditoName, setCreditoName] = useState('');
   const [creditoPhone, setCreditoPhone] = useState('');
   const [creditoWhen, setCreditoWhen] = useState('');
@@ -104,8 +132,11 @@ export default function CheckoutModal({ total, paymentMethods, creditoEnabled, e
   const [invAddress, setInvAddress] = useState('');
   const [invErr, setInvErr] = useState('');
 
-  // Sincroniza el primer draft cuando los métodos llegan tarde.
+  // Sincroniza el primer draft cuando los métodos llegan tarde. En modo
+  // corrección la precarga manda — no la pisamos aunque un método haya sido
+  // renombrado/desactivado desde la venta.
   useEffect(() => {
+    if (isCorrection) return;
     if (availableMethods.length > 0 && !availableMethods.find(m => m.name === drafts[0]?.method)) {
       setDrafts([{ method: availableMethods[0].name, amount: String(total) }]);
     }
@@ -171,18 +202,9 @@ export default function CheckoutModal({ total, paymentMethods, creditoEnabled, e
     setStep('invoice_ask');
   };
 
-  const submit = async (invoice: boolean) => {
-    setError(''); setInvErr('');
-    if (usingCredito && !creditoName.trim()) {
-      setError('El nombre del cliente es obligatorio para registrar el crédito');
-      return;
-    }
-    if (invoice) {
-      const wa = invWhats.replace(/\D/g, '');
-      if (wa.length < 7) { setInvErr('El WhatsApp es obligatorio para enviar la factura'); return; }
-      if (!invName.trim()) { setInvErr('El nombre del cliente es obligatorio'); return; }
-    }
-
+  // Arma el array de pagos a partir de los drafts: el efectivo aporta solo lo
+  // que cubre la cuenta (el resto es vuelto), los demás métodos su monto entero.
+  const buildPayments = (): SalePayment[] => {
     const payments: SalePayment[] = [];
     let cashRemaining = totals.cashApplied;
     let cashChange = totals.change;
@@ -199,6 +221,31 @@ export default function CheckoutModal({ total, paymentMethods, creditoEnabled, e
         payments.push({ method: d.method, amount: handed, reference: d.reference || null });
       }
     }
+    return payments;
+  };
+
+  // Correction: apply the new split to an existing sale. No invoice step and no
+  // notes — the sale's notes (credito/factura data) must stay as they are.
+  const submitCorrection = async () => {
+    setError('');
+    if (totals.remaining > 0) { setError(`Faltan ${COP(totals.remaining)} por cubrir el total`); return; }
+    try { await onConfirm(buildPayments(), undefined); }
+    catch (e: any) { setError(e?.message || 'No se pudo guardar la corrección'); }
+  };
+
+  const submit = async (invoice: boolean) => {
+    setError(''); setInvErr('');
+    if (usingCredito && !creditoName.trim()) {
+      setError('El nombre del cliente es obligatorio para registrar el crédito');
+      return;
+    }
+    if (invoice) {
+      const wa = invWhats.replace(/\D/g, '');
+      if (wa.length < 7) { setInvErr('El WhatsApp es obligatorio para enviar la factura'); return; }
+      if (!invName.trim()) { setInvErr('El nombre del cliente es obligatorio'); return; }
+    }
+
+    const payments = buildPayments();
 
     // Componer notes (credito + factura)
     const noteParts: string[] = [];
@@ -236,7 +283,7 @@ export default function CheckoutModal({ total, paymentMethods, creditoEnabled, e
         <div className="px-6 pt-5 pb-4 border-b border-line sticky top-0 bg-surface z-10">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="text-ink-3 text-[11px] font-bold uppercase tracking-widest">Total a cobrar</div>
+              <div className="text-ink-3 text-[11px] font-bold uppercase tracking-widest">{isCorrection ? 'Total de la venta' : 'Total a cobrar'}</div>
               <div className="font-display font-semibold text-4xl sm:text-5xl tracking-tight tnum">{COP(total)}</div>
               {step === 'payment' && totals.remaining > 0 && totals.appliedToBill > 0 && (
                 <div className="text-warn text-xs font-semibold mt-1">
@@ -319,10 +366,10 @@ export default function CheckoutModal({ total, paymentMethods, creditoEnabled, e
         {step === 'payment' && (
           <div className="px-5 pb-5 pt-1 border-t border-line sticky bottom-0 bg-surface">
             <div className="grid grid-cols-[1fr_auto] gap-2">
-              <button onClick={advanceToInvoice} disabled={!canConfirm || loading}
+              <button onClick={isCorrection ? submitCorrection : advanceToInvoice} disabled={!canConfirm || loading}
                 className="h-14 bg-primary hover:bg-primary-ink disabled:opacity-45 disabled:cursor-not-allowed text-white font-bold text-base rounded-2xl transition-colors active:scale-[0.98] flex items-center justify-center gap-2">
-                <span className="material-symbols-outlined">arrow_forward</span>
-                {loading ? 'Procesando…' : usingCredito ? 'Registrar crédito' : `Cobrar ${COP(total)}`}
+                <span className="material-symbols-outlined">{isCorrection ? 'save' : 'arrow_forward'}</span>
+                {loading ? 'Procesando…' : isCorrection ? 'Guardar corrección' : usingCredito ? 'Registrar crédito' : `Cobrar ${COP(total)}`}
               </button>
               <button onClick={onCancel}
                 className="h-14 px-4 bg-surface-2 hover:bg-surface-3 border border-line text-ink-2 font-semibold rounded-2xl transition-colors">

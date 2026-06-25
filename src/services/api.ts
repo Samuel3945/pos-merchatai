@@ -477,6 +477,23 @@ export const api = {
           amount,
         }),
       }),
+    // Re-enter the WHOLE payment split for a sale using the POS checkout (e.g. a
+    // sale charged as full cash was really cash + transfer). The total stays the
+    // same — only the method breakdown changes. Only valid for a sale of the
+    // current shift; the backend rejects anything older.
+    resplit: (saleId: string, payments: SalePayment[]) =>
+      req<{ ok: boolean }>('/pos/sales/resplit', {
+        method: 'POST',
+        body: JSON.stringify({
+          sale_id: saleId,
+          payments: payments.map(p => ({
+            method: p.method,
+            amount: p.amount,
+            reference: p.reference ?? null,
+            change_given: p.changeGiven ?? 0,
+          })),
+        }),
+      }),
   },
 
   customers: {
