@@ -373,6 +373,9 @@ export const api = {
       // (e.g. a dropped response, or a queued sale drained twice) never creates a
       // second sale. Omitted for legacy callers → server treats it as no-dedupe.
       saleIdempotencyKey?: string | null,
+      // Manual credit due date ('YYYY-MM-DD'). The server stores it verbatim and
+      // only falls back to the org default term when omitted.
+      dueDate?: string | null,
     ) =>
       req<{ id: string; total: number; items: number }>('/pos/sale', {
         method: 'POST',
@@ -383,6 +386,7 @@ export const api = {
           payments,
           cashierId,
           sale_idempotency_key: saleIdempotencyKey ?? undefined,
+          dueDate: dueDate ?? undefined,
         }),
       }),
   },
