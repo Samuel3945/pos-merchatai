@@ -464,6 +464,10 @@ export default function Pos({ session, onLogout }: Props) {
       return { ...i, qty: newQty, price: live ? unitPriceFor(live, newQty) : i.price };
     }).filter(i => i.qty > 0));
 
+  // Remove a whole line from the cart in one tap, regardless of its quantity.
+  const removeFromCart = (id: string) =>
+    setCart(prev => prev.filter(i => i.productId !== id));
+
   const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const itemCount = cart.length;
 
@@ -601,6 +605,11 @@ export default function Pos({ session, onLogout }: Props) {
           <div className="w-16 text-right font-bold text-sm tnum">
             {cop(item.price * item.qty)}
           </div>
+          <button onClick={() => removeFromCart(item.productId)} title="Eliminar"
+            aria-label={`Eliminar ${item.name}`}
+            className="w-7 h-7 grid place-items-center rounded-md text-ink-3 hover:text-danger hover:bg-surface transition-colors shrink-0">
+            <span className="material-symbols-outlined text-[18px]">delete</span>
+          </button>
         </div>
         );
       })}
