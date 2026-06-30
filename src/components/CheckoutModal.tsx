@@ -6,6 +6,26 @@ const COP = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('es-CO'
 // Denominaciones más comunes que un cliente entrega en Colombia.
 const QUICK_BILLS = [2000, 5000, 10000, 20000, 50000, 100000];
 
+// Local-time YYYY-MM-DD for a date `days` from today. Used for credit due dates
+// (the structured value sent to the backend, which the server stores verbatim).
+const isoDaysFromNow = (days: number): string => {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+// Human label for a YYYY-MM-DD due date, e.g. "viernes, 1 de agosto".
+const dueDateLabel = (iso: string): string => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Intl.DateTimeFormat('es-CO', {
+    weekday: 'long', day: 'numeric', month: 'long',
+  }).format(new Date(y, m - 1, d));
+};
+
 type Method = { name: string; icon: string; type: string; subtitle?: string };
 
 type DraftPayment = {
@@ -34,7 +54,7 @@ interface Props {
   // onConfirm directly with the new breakdown.
   mode?: 'sale' | 'correction';
   initialPayments?: SalePayment[];
-  onConfirm: (payments: SalePayment[], notes?: string) => Promise<void>;
+  onConfirm: (payments: SalePayment[], notes?: string, dueDate?: string | null) => Promise<void>;
   onCancel: () => void;
   loading: boolean;
 }
@@ -130,7 +150,9 @@ export default function CheckoutModal({ total, paymentMethods, creditoEnabled, e
   );
   const [creditoName, setCreditoName] = useState('');
   const [creditoPhone, setCreditoPhone] = useState('');
-  const [creditoWhen, setCreditoWhen] = useState('');
+  // Structured credit due date (YYYY-MM-DD). Defaults to the business term but the
+  // cashier can change it with the calendar / quick presets in CreditoFields.
+  const [creditoDueDate, setCreditoDueDate] = useState(() => isoDaysFromNow(creditoTermDays));
   const [error, setError] = useState('');
 
   // Datos de factura
@@ -250,10 +272,10 @@ export default function CheckoutModal({ total, paymentMethods, creditoEnabled, e
       if (creditoName.trim()) parts.push(`Nombre:${creditoName.trim()}`);
       const phone = creditoPhone.replace(/\D/g, '');
       if (phone) parts.push(`Tel:${phone}`);
-      if (creditoWhen.trim()) parts.push(`Pago:${creditoWhen.trim()}`);
+      if (creditoDueDate) parts.push(`Pago:${dueDateLabel(creditoDueDate)}`);
       if (parts.length) notes = `[CREDITO] ${parts.join(' | ')}`;
     }
-    try { await onConfirm(buildPayments(), notes); }
+    try { await onConfirm(buildPayments(), notes, usingCredito ? creditoDueDate : undefined); }
     catch (e: any) { setError(e?.message || 'No se pudo guardar la corrección'); }
   };
 
@@ -278,7 +300,7 @@ export default function CheckoutModal({ total, paymentMethods, creditoEnabled, e
       if (creditoName.trim())  creditoParts.push(`Nombre:${creditoName.trim()}`);
       const phone = creditoPhone.replace(/\D/g, '');
       if (phone)             creditoParts.push(`Tel:${phone}`);
-      if (creditoWhen.trim())  creditoParts.push(`Pago:${creditoWhen.trim()}`);
+      if (creditoDueDate)  creditoParts.push(`Pago:${dueDateLabel(creditoDueDate)}`);
       if (creditoParts.length) noteParts.push(`[CREDITO] ${creditoParts.join(' | ')}`);
     }
     if (invoice) {
@@ -293,7 +315,7 @@ export default function CheckoutModal({ total, paymentMethods, creditoEnabled, e
     }
     const notes = noteParts.join(' || ') || undefined;
 
-    try { await onConfirm(payments, notes); }
+    try { await onConfirm(payments, notes, usingCredito ? creditoDueDate : undefined); }
     catch (e: any) { setError(e?.message || 'Error procesando venta'); setStep('payment'); }
   };
 
@@ -353,9 +375,8 @@ export default function CheckoutModal({ total, paymentMethods, creditoEnabled, e
               addDraft={addDraft}
               creditoName={creditoName} setCreditoName={setCreditoName}
               creditoPhone={creditoPhone} setCreditoPhone={setCreditoPhone}
-              creditoWhen={creditoWhen} setCreditoWhen={setCreditoWhen}
+              creditoDueDate={creditoDueDate} setCreditoDueDate={setCreditoDueDate}
               usingCredito={usingCredito}
-              creditoTermDays={creditoTermDays}
             />
           )}
 
@@ -427,17 +448,15 @@ interface PaymentStepProps {
   addDraft: (methodName?: string) => void;
   creditoName: string; setCreditoName: (s: string) => void;
   creditoPhone: string; setCreditoPhone: (s: string) => void;
-  creditoWhen: string; setCreditoWhen: (s: string) => void;
+  creditoDueDate: string; setCreditoDueDate: (s: string) => void;
   usingCredito: boolean;
-  creditoTermDays: number;
 }
 
 function PaymentStep(props: PaymentStepProps) {
   const {
     total, availableMethods, drafts, setDrafts, combineMode, setCombineMode, allowMultiple,
     totals, pickExact, pickCashReceived, updateDraft, removeDraft,
-    creditoName, setCreditoName, creditoPhone, setCreditoPhone, creditoWhen, setCreditoWhen, usingCredito,
-    creditoTermDays,
+    creditoName, setCreditoName, creditoPhone, setCreditoPhone, creditoDueDate, setCreditoDueDate, usingCredito,
   } = props;
 
   // Ordenar para que efectivo aparezca primero (es el más usado en tienda).
@@ -554,8 +573,7 @@ function PaymentStep(props: PaymentStepProps) {
         <CreditoFields
           name={creditoName} setName={setCreditoName}
           phone={creditoPhone} setPhone={setCreditoPhone}
-          when={creditoWhen} setWhen={setCreditoWhen}
-          termDays={creditoTermDays}
+          dueDate={creditoDueDate} setDueDate={setCreditoDueDate}
         />
       )}
 
@@ -653,8 +671,7 @@ function PaymentStep(props: PaymentStepProps) {
             <CreditoFields
               name={creditoName} setName={setCreditoName}
               phone={creditoPhone} setPhone={setCreditoPhone}
-              when={creditoWhen} setWhen={setCreditoWhen}
-              termDays={creditoTermDays}
+              dueDate={creditoDueDate} setDueDate={setCreditoDueDate}
             />
           )}
         </div>
@@ -664,19 +681,19 @@ function PaymentStep(props: PaymentStepProps) {
 }
 
 function CreditoFields({
-  name, setName, phone, setPhone, when, setWhen, termDays,
+  name, setName, phone, setPhone, dueDate, setDueDate,
 }: {
   name: string; setName: (s: string) => void;
   phone: string; setPhone: (s: string) => void;
-  when: string; setWhen: (s: string) => void;
-  termDays: number;
+  dueDate: string; setDueDate: (s: string) => void;
 }) {
-  // Vencimiento real que asignará el servidor: el plazo por defecto del negocio
-  // (Ajustes). Lo mostramos para que el cajero sepa hasta cuándo tiene el cliente.
-  const dueDate = new Date(Date.now() + termDays * 86400000);
-  const dueLabel = new Intl.DateTimeFormat('es-CO', {
-    weekday: 'long', day: 'numeric', month: 'long',
-  }).format(dueDate);
+  const today = isoDaysFromNow(0);
+  // Quick presets the cashier taps instead of opening the calendar.
+  const presets = [
+    { label: 'Mañana', days: 1 },
+    { label: '15 días', days: 15 },
+    { label: '30 días', days: 30 },
+  ];
   return (
     <div className="bg-warn-soft border border-warn/30 rounded-xl p-3 space-y-2">
       <p className="text-warn text-[11px] font-bold uppercase tracking-widest">Datos del cliente (crédito)</p>
@@ -698,12 +715,23 @@ function CreditoFields({
       </div>
       <div>
         <span className="block text-[10px] text-warn/80 font-bold uppercase tracking-wider mb-1">¿Cuándo paga?</span>
-        <input type="text" value={when} onChange={e => setWhen(e.target.value)}
-          placeholder="Ej: Viernes, fin de mes…"
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {presets.map(p => {
+            const iso = isoDaysFromNow(p.days);
+            const active = dueDate === iso;
+            return (
+              <button key={p.label} type="button" onClick={() => setDueDate(iso)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${active ? 'bg-warn text-white border-warn' : 'bg-surface text-warn border-warn/50 hover:bg-warn-soft'}`}>
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+        <input type="date" value={dueDate} min={today} onChange={e => setDueDate(e.target.value)}
           className="w-full bg-surface border border-warn/50 rounded-lg px-3 py-2 text-ink text-sm focus:border-warn outline-none" />
       </div>
       <p className="text-warn/90 text-[11px] leading-snug pt-0.5">
-        Plazo del negocio: <strong>{termDays} días</strong> — vence el {dueLabel}.
+        Vence el <strong>{dueDateLabel(dueDate)}</strong>.
       </p>
     </div>
   );

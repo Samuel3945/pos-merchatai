@@ -63,6 +63,8 @@ export interface QueuedSale {
   paymentType: string;
   payments?:   SalePayment[];
   notes?:      string;
+  // Manual credit due date ('YYYY-MM-DD') for offline credito sales; replayed on sync.
+  dueDate?:    string | null;
   total:       number;
   queuedAt:    string;
 }

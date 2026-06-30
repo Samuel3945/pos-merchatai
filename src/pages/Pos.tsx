@@ -344,7 +344,7 @@ export default function Pos({ session, onLogout }: Props) {
         const primary = sale.payments && sale.payments.length === 1
           ? sale.payments[0].method
           : (sale.paymentType || 'Efectivo');
-        await api.pos.sale(sale.items, primary, sale.notes, sale.payments, session.cash.cashierId);
+        await api.pos.sale(sale.items, primary, sale.notes, sale.payments, session.cash.cashierId, undefined, sale.dueDate);
       },
       () => { /* removeFromQueue is done inside syncQueue */ },
       (localId, err) => { errs[localId] = err; },
@@ -522,7 +522,7 @@ export default function Pos({ session, onLogout }: Props) {
     refreshParked();
   };
 
-  const completeSaleMixed = async (payments: SalePayment[], notes?: string) => {
+  const completeSaleMixed = async (payments: SalePayment[], notes?: string, dueDate?: string | null) => {
     if (!cart.length) return;
     setLoading(true); setError('');
     const saleItems = cart.map(i => ({ productId: i.productId, qty: i.qty }));
@@ -531,7 +531,7 @@ export default function Pos({ session, onLogout }: Props) {
     // Estrategia: siempre intentamos enviar al backend primero. Solo encolamos localmente si
     // realmente no hay red (navigator está offline) o si el fetch falla por TypeError de red.
     try {
-      await api.pos.sale(saleItems, primary, notes, payments, session.cash.cashierId);
+      await api.pos.sale(saleItems, primary, notes, payments, session.cash.cashierId, undefined, dueDate);
       loadFromServer();
       const change = payments.reduce((s, p) => s + (p.changeGiven || 0), 0);
       setCart([]); setShowCart(false); setShowCheckout(false);
@@ -547,7 +547,7 @@ export default function Pos({ session, onLogout }: Props) {
       // así que no lo usamos para decidir si encolar — solo errores reales de red.
       const isNetworkErr = e instanceof TypeError;
       if (isNetworkErr) {
-        await queueSale({ items: saleItems, paymentType: primary, payments, notes, total });
+        await queueSale({ items: saleItems, paymentType: primary, payments, notes, dueDate, total });
         await refreshQueueCount();
         setOnline(false);
         setCart([]); setShowCart(false); setShowCheckout(false);
