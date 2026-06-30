@@ -191,11 +191,11 @@ export default function VentasCajero({ session }: Props) {
     });
   };
 
-  const submitCorrection = async (payments: SalePayment[], notes?: string) => {
+  const submitCorrection = async (payments: SalePayment[], notes?: string, dueDate?: string | null) => {
     if (!correctSale) return;
     setCorrectLoading(true);
     try {
-      await api.sales.resplit(correctSale.id, payments, notes);
+      await api.sales.resplit(correctSale.id, payments, notes, dueDate);
       setCorrectSale(null);
       load(search, dateStart, dateEnd, page);
     } finally {

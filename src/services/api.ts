@@ -485,7 +485,7 @@ export const api = {
     // sale charged as full cash was really cash + transfer). The total stays the
     // same — only the method breakdown changes. Only valid for a sale of the
     // current shift; the backend rejects anything older.
-    resplit: (saleId: string, payments: SalePayment[], notes?: string) =>
+    resplit: (saleId: string, payments: SalePayment[], notes?: string, dueDate?: string | null) =>
       req<{ ok: boolean }>('/pos/sales/resplit', {
         method: 'POST',
         body: JSON.stringify({
@@ -497,6 +497,7 @@ export const api = {
             change_given: p.changeGiven ?? 0,
           })),
           notes: notes ?? null,
+          due_date: dueDate ?? null,
         }),
       }),
   },
