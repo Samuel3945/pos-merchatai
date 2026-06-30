@@ -1179,16 +1179,8 @@ function CategoryFilterRow({
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2 overflow-x-auto pb-0.5 scrollbar-thin">
-        <button onClick={() => setCategory('all')} className={pill(category === 'all')}>Todas</button>
-        {categories.map(cat => (
-          <button key={cat} onClick={() => setCategory(cat)} className={`${pill(category === cat)} inline-flex items-center gap-1.5`}>
-            <span className="material-symbols-outlined text-[14px]">{catIcon(cat)}</span>
-            {cat}
-          </button>
-        ))}
         {hasKg && (
           <>
-            <div className="shrink-0 w-px h-6 bg-line mx-0.5" />
             <button onClick={() => setUnit(unit === 'unit' ? 'all' : 'unit')}
               className={`shrink-0 h-9 px-3.5 rounded-xl text-[12.5px] font-bold whitespace-nowrap transition-colors border ${
                 unit === 'unit' ? 'bg-info border-info text-white' : 'bg-surface border-line text-ink-2 hover:text-ink hover:border-line-strong'
@@ -1201,8 +1193,16 @@ function CategoryFilterRow({
               }`}>
               Por kg
             </button>
+            <div className="shrink-0 w-px h-6 bg-line mx-0.5" />
           </>
         )}
+        <button onClick={() => setCategory('all')} className={pill(category === 'all')}>Todas</button>
+        {categories.map(cat => (
+          <button key={cat} onClick={() => setCategory(cat)} className={`${pill(category === cat)} inline-flex items-center gap-1.5`}>
+            <span className="material-symbols-outlined text-[14px]">{catIcon(cat)}</span>
+            {cat}
+          </button>
+        ))}
       </div>
 
       {showFacets && (
