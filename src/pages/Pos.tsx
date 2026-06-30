@@ -74,8 +74,8 @@ function Keypad({ onKey }: { onKey: (k: string) => void }) {
 // Modal de peso (productos por KG) — teclado + pesos rápidos + subtotal en vivo
 // ─────────────────────────────────────────────────────────────────────────────
 function KgModal({
-  product, onConfirm, onCancel,
-}: { product: Product; onConfirm: (qty: number) => void; onCancel: () => void }) {
+  product, maxKg, onConfirm, onCancel,
+}: { product: Product; maxKg: number; onConfirm: (qty: number) => void; onCancel: () => void }) {
   // 'weight': cashier types kg → shows the price. 'amount': cashier types the
   // money to charge → shows the equivalent weight (e.g. "$5.000 de queso").
   const [mode, setMode] = useState<'weight' | 'amount'>('weight');
@@ -89,6 +89,8 @@ function KgModal({
   const rawKg = mode === 'amount' ? (price > 0 ? num / price : 0) : num;
   const kg = parseFloat(rawKg.toFixed(3));
   const charge = kg * price;
+  // Block adding more weight than the stock left for this product (unless oversell is allowed).
+  const over = kg > maxKg;
 
   const switchMode = (m: 'weight' | 'amount') => { setMode(m); setVal(''); };
 
@@ -188,7 +190,12 @@ function KgModal({
 
         <Keypad onKey={onKey} />
 
-        <button onClick={() => kg > 0 && onConfirm(kg)} disabled={kg <= 0}
+        {over && (
+          <div className="mt-3 text-[12.5px] text-danger text-center font-semibold tnum">
+            Stock insuficiente · {maxKg} disp.
+          </div>
+        )}
+        <button onClick={() => kg > 0 && !over && onConfirm(kg)} disabled={kg <= 0 || over}
           className="w-full h-14 mt-4 rounded-2xl bg-primary hover:bg-primary-ink disabled:opacity-45 disabled:cursor-not-allowed text-white font-bold text-base flex items-center justify-center gap-2 transition-colors">
           <span className="material-symbols-outlined">add</span>
           Agregar {kg > 0 ? `· ${kg} kg · ${cop(charge)}` : ''}
@@ -446,9 +453,10 @@ export default function Pos({ session, onLogout }: Props) {
     if (!allowOversell && product.stock <= 0) { flashBorder('err'); return; }
     setCart(prev => {
       const ex = prev.find(i => i.productId === product.id);
-      if (!allowOversell && product.unit_type === 'unit') {
+      // Cap the cart against available stock for BOTH unit and weight products.
+      if (!allowOversell) {
         const currentQty = ex?.qty ?? 0;
-        if (currentQty + qty > product.stock) { flashBorder('err'); return prev; }
+        if (parseFloat((currentQty + qty).toFixed(3)) > Number(product.stock)) { flashBorder('err'); return prev; }
       }
       if (ex) return prev.map(i => {
         if (i.productId !== product.id) return i;
@@ -488,9 +496,11 @@ export default function Pos({ session, onLogout }: Props) {
   const updateQty = (id: string, d: number) =>
     setCart(prev => prev.map(i => {
       if (i.productId !== id) return i;
-      const newQty = i.unitType === 'unit' ? i.qty + d : parseFloat((i.qty + d * 0.1).toFixed(3));
-      // Re-evaluate wholesale tiers whenever the quantity changes.
       const live = allProducts.find(p => p.id === id);
+      let newQty = i.unitType === 'unit' ? i.qty + d : parseFloat((i.qty + d * 0.1).toFixed(3));
+      // Don't let the stepper push the line past available stock (unless oversell is allowed).
+      if (!allowOversell && d > 0 && live && newQty > Number(live.stock)) newQty = Number(live.stock);
+      // Re-evaluate wholesale tiers whenever the quantity changes.
       return { ...i, qty: newQty, price: live ? unitPriceFor(live, newQty) : i.price };
     }).filter(i => i.qty > 0));
 
@@ -505,7 +515,11 @@ export default function Pos({ session, onLogout }: Props) {
       if (i.productId !== id) return [i];
       if (!Number.isFinite(parsed) || parsed <= 0) return [];
       const live = allProducts.find(p => p.id === id);
-      const newQty = i.unitType === 'unit' ? Math.max(1, Math.round(parsed)) : parseFloat(parsed.toFixed(3));
+      let newQty = i.unitType === 'unit' ? Math.max(1, Math.round(parsed)) : parseFloat(parsed.toFixed(3));
+      // Clamp a typed quantity to available stock (unless oversell is allowed).
+      if (!allowOversell && live && newQty > Number(live.stock)) {
+        newQty = i.unitType === 'unit' ? Math.floor(Number(live.stock)) : Number(live.stock);
+      }
       return [{ ...i, qty: newQty, price: live ? unitPriceFor(live, newQty) : i.price }];
     }));
   };
@@ -886,6 +900,7 @@ export default function Pos({ session, onLogout }: Props) {
       {kgProduct && (
         <KgModal
           product={kgProduct}
+          maxKg={allowOversell ? Infinity : Math.max(0, Number(kgProduct.stock) - (cart.find(i => i.productId === kgProduct.id)?.qty ?? 0))}
           onConfirm={qty => { addToCart(kgProduct, qty); setKgProduct(null); }}
           onCancel={() => { setKgProduct(null); focusSearch(); }}
         />
