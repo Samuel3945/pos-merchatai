@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PaymentMethod, SalePayment } from '../services/api';
+import { DueDateCalendar } from './DueDateCalendar';
 
 const COP = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('es-CO')}`;
 
@@ -687,13 +688,6 @@ function CreditoFields({
   phone: string; setPhone: (s: string) => void;
   dueDate: string; setDueDate: (s: string) => void;
 }) {
-  const today = isoDaysFromNow(0);
-  // Quick presets the cashier taps instead of opening the calendar.
-  const presets = [
-    { label: 'Mañana', days: 1 },
-    { label: '15 días', days: 15 },
-    { label: '30 días', days: 30 },
-  ];
   return (
     <div className="bg-warn-soft border border-warn/30 rounded-xl p-3 space-y-2">
       <p className="text-warn text-[11px] font-bold uppercase tracking-widest">Datos del cliente (crédito)</p>
@@ -715,20 +709,7 @@ function CreditoFields({
       </div>
       <div>
         <span className="block text-[10px] text-warn/80 font-bold uppercase tracking-wider mb-1">¿Cuándo paga?</span>
-        <div className="flex flex-wrap gap-1.5 mb-2">
-          {presets.map(p => {
-            const iso = isoDaysFromNow(p.days);
-            const active = dueDate === iso;
-            return (
-              <button key={p.label} type="button" onClick={() => setDueDate(iso)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${active ? 'bg-warn text-white border-warn' : 'bg-surface text-warn border-warn/50 hover:bg-warn-soft'}`}>
-                {p.label}
-              </button>
-            );
-          })}
-        </div>
-        <input type="date" value={dueDate} min={today} onChange={e => setDueDate(e.target.value)}
-          className="w-full bg-surface border border-warn/50 rounded-lg px-3 py-2 text-ink text-sm focus:border-warn outline-none" />
+        <DueDateCalendar value={dueDate} onChange={setDueDate} />
       </div>
       <p className="text-warn/90 text-[11px] leading-snug pt-0.5">
         Vence el <strong>{dueDateLabel(dueDate)}</strong>.
