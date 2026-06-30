@@ -644,7 +644,7 @@ export default function Pos({ session, onLogout }: Props) {
             </div>
           </div>
           <div className="flex items-center gap-0.5 bg-surface-2 rounded-lg p-0.5">
-            <button onClick={() => updateQty(item.productId, -1)}
+            <button onClick={() => { setQtyEdit(null); updateQty(item.productId, -1); }}
               className="w-7 h-7 rounded-md bg-surface hover:bg-primary-soft hover:text-primary text-ink flex items-center justify-center font-bold shadow-token2 transition-colors">−</button>
             <input
               type="text"
@@ -663,7 +663,7 @@ export default function Pos({ session, onLogout }: Props) {
               onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
               className="min-w-[2.25rem] w-12 text-center font-bold text-sm tnum bg-transparent outline-none rounded-md focus:bg-surface focus:ring-1 focus:ring-primary"
             />
-            <button onClick={() => updateQty(item.productId, 1)}
+            <button onClick={() => { setQtyEdit(null); updateQty(item.productId, 1); }}
               className="w-7 h-7 rounded-md bg-surface hover:bg-primary-soft hover:text-primary text-ink flex items-center justify-center font-bold shadow-token2 transition-colors">+</button>
           </div>
           <div className="w-16 text-right font-bold text-sm tnum">
