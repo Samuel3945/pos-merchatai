@@ -13,6 +13,17 @@ import { useLowStockThreshold } from '../lib/useThresholds';
 
 const cop = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('es-CO')}`;
 
+// A network failure surfaces in two shapes: the WebView fetch throws a TypeError
+// ("Failed to fetch"), while CapacitorHttp (native requests, used to bypass CORS
+// in the APK) rejects with a host/connection error string such as
+// "Unable to resolve host ...: No address associated with hostname".
+// Treat both as "offline" so a sale is queued locally instead of erroring out.
+function isNetworkError(e: any): boolean {
+  if (e instanceof TypeError) return true;
+  const msg = String(e?.message ?? e ?? '').toLowerCase();
+  return /unable to resolve host|no address associated|failed to connect|network|timed? ?out|\bconnection\b|offline|err_internet|err_network|err_name_not_resolved|enotfound/.test(msg);
+}
+
 interface CartItem {
   productId: string;
   name: string;
@@ -79,12 +90,6 @@ function KgModal({
   const kg = parseFloat(rawKg.toFixed(3));
   const charge = kg * price;
 
-  useEffect(() => {
-    const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
-    window.addEventListener('keydown', onEsc);
-    return () => window.removeEventListener('keydown', onEsc);
-  }, [onCancel]);
-
   const switchMode = (m: 'weight' | 'amount') => { setMode(m); setVal(''); };
 
   const onKey = (k: string) => {
@@ -98,6 +103,23 @@ function KgModal({
       return v + k;
     });
   };
+
+  // Physical/peripheral keyboard support: route key presses through the same
+  // onKey logic as the on-screen keypad. Enter confirms, Escape cancels.
+  const liveRef = useRef({ onKey, kg, onConfirm, onCancel });
+  liveRef.current = { onKey, kg, onConfirm, onCancel };
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const s = liveRef.current;
+      if (e.key === 'Escape') { s.onCancel(); return; }
+      if (e.key === 'Enter') { if (s.kg > 0) s.onConfirm(s.kg); return; }
+      if (e.key === 'Backspace') { e.preventDefault(); s.onKey('del'); return; }
+      if (e.key === ',' || e.key === '.') { s.onKey('.'); return; }
+      if (e.key.length === 1 && e.key >= '0' && e.key <= '9') s.onKey(e.key);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   const quick = mode === 'amount' ? ['1000', '2000', '5000', '10000'] : ['0.25', '0.5', '1', '2'];
 
@@ -235,6 +257,14 @@ export default function Pos({ session, onLogout }: Props) {
   const [attrFilter, setAttrFilter] = useState<string>('all');
   const lowStockThreshold = useLowStockThreshold();
   const searchRef = useRef<HTMLInputElement>(null);
+  // Re-focus the search box so a USB barcode scanner keeps typing into it.
+  // Skip on touch devices, where a programmatic focus just pops up the on-screen
+  // keyboard (mobile users scan with the camera, not a USB reader). The keyboard
+  // still opens when the user taps the search box themselves.
+  const focusSearch = useCallback(() => {
+    if (window.matchMedia?.('(pointer: coarse)').matches) return;
+    searchRef.current?.focus();
+  }, []);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   const refreshParked = () => setParkedCarts(listParked());
@@ -255,7 +285,7 @@ export default function Pos({ session, onLogout }: Props) {
     // si la red está caída de verdad, syncQueue captura el error y no pasa nada.
     triggerSync();
     refreshParked();
-    searchRef.current?.focus();
+    focusSearch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -429,7 +459,7 @@ export default function Pos({ session, onLogout }: Props) {
     });
     flashBorder('ok');
     setQuery(''); setResults(allProducts);
-    searchRef.current?.focus();
+    focusSearch();
   };
 
   const handleProductClick = (product: Product) => {
@@ -464,6 +494,22 @@ export default function Pos({ session, onLogout }: Props) {
       return { ...i, qty: newQty, price: live ? unitPriceFor(live, newQty) : i.price };
     }).filter(i => i.qty > 0));
 
+  // Live text while a cart line's quantity is being typed (null = not editing).
+  const [qtyEdit, setQtyEdit] = useState<{ id: string; text: string } | null>(null);
+
+  // Commit a typed cart quantity: parse, clamp, re-evaluate tiers. Empty/≤ 0 removes the line.
+  const commitQty = (id: string, raw: string) => {
+    setQtyEdit(null);
+    const parsed = parseFloat(raw.replace(',', '.'));
+    setCart(prev => prev.flatMap(i => {
+      if (i.productId !== id) return [i];
+      if (!Number.isFinite(parsed) || parsed <= 0) return [];
+      const live = allProducts.find(p => p.id === id);
+      const newQty = i.unitType === 'unit' ? Math.max(1, Math.round(parsed)) : parseFloat(parsed.toFixed(3));
+      return [{ ...i, qty: newQty, price: live ? unitPriceFor(live, newQty) : i.price }];
+    }));
+  };
+
   // Remove a whole line from the cart in one tap, regardless of its quantity.
   const removeFromCart = (id: string) =>
     setCart(prev => prev.filter(i => i.productId !== id));
@@ -484,7 +530,7 @@ export default function Pos({ session, onLogout }: Props) {
       refreshParked();
       setSuccess(`⏸  Venta pausada: ${parked.label}`);
       setTimeout(() => setSuccess(''), 3500);
-      searchRef.current?.focus();
+      focusSearch();
     }
   };
 
@@ -514,7 +560,7 @@ export default function Pos({ session, onLogout }: Props) {
       ? `↩  ${loaded} ítems cargados (${missing} ya no existen)`
       : `↩  Venta de ${parked.label} reanudada`);
     setTimeout(() => setSuccess(''), 4000);
-    searchRef.current?.focus();
+    focusSearch();
   };
 
   const handleDiscardParked = (id: string) => {
@@ -545,7 +591,11 @@ export default function Pos({ session, onLogout }: Props) {
       // Solo encolamos cuando fetch realmente falló por red (TypeError "Failed to fetch").
       // navigator.onLine es poco confiable (a veces dice false con conexión activa),
       // así que no lo usamos para decidir si encolar — solo errores reales de red.
-      const isNetworkErr = e instanceof TypeError;
+      // CapacitorHttp (native requests, used to bypass CORS in the APK) does NOT
+      // throw a TypeError when the network is down — it rejects with a native error
+      // like "Unable to resolve host ...: No address associated with hostname".
+      // Detect both so an offline sale is queued instead of surfacing a raw error.
+      const isNetworkErr = isNetworkError(e);
       if (isNetworkErr) {
         await queueSale({ items: saleItems, paymentType: primary, payments, notes, dueDate, total });
         await refreshQueueCount();
@@ -560,7 +610,7 @@ export default function Pos({ session, onLogout }: Props) {
       }
     } finally {
       setLoading(false);
-      searchRef.current?.focus();
+      focusSearch();
     }
   };
 
@@ -596,9 +646,23 @@ export default function Pos({ session, onLogout }: Props) {
           <div className="flex items-center gap-0.5 bg-surface-2 rounded-lg p-0.5">
             <button onClick={() => updateQty(item.productId, -1)}
               className="w-7 h-7 rounded-md bg-surface hover:bg-primary-soft hover:text-primary text-ink flex items-center justify-center font-bold shadow-token2 transition-colors">−</button>
-            <span className="min-w-[2.25rem] text-center font-bold text-sm tnum">
-              {item.unitType === 'kg' ? `${Number(item.qty)}kg` : Math.round(Number(item.qty))}
-            </span>
+            <input
+              type="text"
+              inputMode={item.unitType === 'kg' ? 'decimal' : 'numeric'}
+              aria-label={`Cantidad ${item.name}`}
+              value={qtyEdit?.id === item.productId
+                ? qtyEdit.text
+                : (item.unitType === 'kg' ? `${Number(item.qty)}` : String(Math.round(Number(item.qty))))}
+              onFocus={e => { setQtyEdit({ id: item.productId, text: item.unitType === 'kg' ? `${Number(item.qty)}` : String(Math.round(Number(item.qty))) }); e.currentTarget.select(); }}
+              onChange={e => {
+                const t = e.target.value;
+                const ok = item.unitType === 'kg' ? /^\d*[.,]?\d*$/.test(t) : /^\d*$/.test(t);
+                if (ok) setQtyEdit({ id: item.productId, text: t });
+              }}
+              onBlur={e => commitQty(item.productId, e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+              className="min-w-[2.25rem] w-12 text-center font-bold text-sm tnum bg-transparent outline-none rounded-md focus:bg-surface focus:ring-1 focus:ring-primary"
+            />
             <button onClick={() => updateQty(item.productId, 1)}
               className="w-7 h-7 rounded-md bg-surface hover:bg-primary-soft hover:text-primary text-ink flex items-center justify-center font-bold shadow-token2 transition-colors">+</button>
           </div>
@@ -823,7 +887,7 @@ export default function Pos({ session, onLogout }: Props) {
         <KgModal
           product={kgProduct}
           onConfirm={qty => { addToCart(kgProduct, qty); setKgProduct(null); }}
-          onCancel={() => { setKgProduct(null); searchRef.current?.focus(); }}
+          onCancel={() => { setKgProduct(null); focusSearch(); }}
         />
       )}
 
@@ -841,7 +905,7 @@ export default function Pos({ session, onLogout }: Props) {
               className="flex-1 bg-transparent text-base text-ink placeholder-ink-4"
               autoComplete="off" />
             {query && (
-              <button onClick={() => { setQuery(''); setResults(allProducts); searchRef.current?.focus(); }}
+              <button onClick={() => { setQuery(''); setResults(allProducts); focusSearch(); }}
                 className="w-6 h-6 grid place-items-center rounded-md text-ink-3 hover:text-ink">
                 <span className="material-symbols-outlined text-[16px]">close</span>
               </button>
