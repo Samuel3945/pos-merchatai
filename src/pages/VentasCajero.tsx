@@ -59,13 +59,11 @@ function formatQty(qty: number | string, unitType?: 'unit' | 'kg') {
 
 // ── Return modal ──────────────────────────────────────────────────────────────
 
+// Only the two curated reasons the admin panel offers: customer_request returns
+// the item to stock; damaged is an exchange (no refund) that leaves as merma.
 const RETURN_REASONS = [
-  { value: 'customer_request', label: 'Cliente cambió de opinión' },
+  { value: 'customer_request', label: 'Cambio de opinión del cliente' },
   { value: 'damaged',          label: 'Producto dañado' },
-  { value: 'wrong_product',    label: 'Producto equivocado' },
-  { value: 'price_error',      label: 'Error de precio' },
-  { value: 'duplicate',        label: 'Cobro duplicado' },
-  { value: 'other',            label: 'Otro motivo' },
 ];
 
 interface ReturnRequest {
