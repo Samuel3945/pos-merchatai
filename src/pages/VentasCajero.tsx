@@ -69,7 +69,7 @@ const RETURN_REASONS = [
 interface ReturnRequest {
   reason: string;
   refundMethod: string;
-  items: Array<{ saleItemId: string; qty: number; refundAmount: number; restock: boolean }>;
+  items: Array<{ saleItemId: string; qty: number; refundAmount: number; disposition?: 'restock' | 'damaged' | 'discard'; restock?: boolean }>;
   notes?: string;
   partial: boolean;
 }
@@ -566,7 +566,11 @@ export default function VentasCajero({ session }: Props) {
                           </div>
                         )}
                         <span className="text-ink-3 text-xs font-mono w-20 text-right">
-                          {fullyReturned ? '—' : `$${Number(Number(item.subtotal) / Number(item.qty) * qty).toLocaleString('es-CO')}`}
+                          {fullyReturned
+                            ? '—'
+                            : returnReason === 'damaged'
+                              ? 'Merma'
+                              : `$${Number(Number(item.subtotal) / Number(item.qty) * qty).toLocaleString('es-CO')}`}
                         </span>
                       </div>
                     );
@@ -585,16 +589,22 @@ export default function VentasCajero({ session }: Props) {
                   </div>
                   <div>
                     <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">
-                      Reembolso en <span className="text-danger">*</span>
+                      Reembolso en {returnReason !== 'damaged' && <span className="text-danger">*</span>}
                     </label>
-                    <select value={returnRefundMethod} onChange={e => setReturnRefundMethod(e.target.value)}
-                      className="w-full bg-bg border border-line rounded-xl px-3 py-2.5 text-ink text-sm focus:border-primary"
-                      disabled={refundPaymentMethods.length === 0}>
-                      {refundPaymentMethods.length === 0
-                        ? <option value="">Cargando...</option>
-                        : refundPaymentMethods.map(m => <option key={m.id} value={m.name}>{m.name}</option>)
-                      }
-                    </select>
+                    {returnReason === 'damaged' ? (
+                      <div className="w-full bg-bg border border-line rounded-xl px-3 py-2.5 text-ink-3 text-sm">
+                        No aplica (merma)
+                      </div>
+                    ) : (
+                      <select value={returnRefundMethod} onChange={e => setReturnRefundMethod(e.target.value)}
+                        className="w-full bg-bg border border-line rounded-xl px-3 py-2.5 text-ink text-sm focus:border-primary"
+                        disabled={refundPaymentMethods.length === 0}>
+                        {refundPaymentMethods.length === 0
+                          ? <option value="">Cargando...</option>
+                          : refundPaymentMethods.map(m => <option key={m.id} value={m.name}>{m.name}</option>)
+                        }
+                      </select>
+                    )}
                   </div>
                 </div>
 
@@ -609,9 +619,11 @@ export default function VentasCajero({ session }: Props) {
 
                 <div className="bg-warn-soft/20 border border-warn/20 rounded-xl p-3 text-warn text-xs">
                   <span className="material-symbols-outlined text-[14px] align-middle mr-1">info</span>
-                  {refundPaymentMethods.find(m => m.name === returnRefundMethod)?.type === 'cash'
-                    ? 'Se restocará inventario y se registrará la salida de efectivo en la caja abierta.'
-                    : 'Se restocará inventario. El reembolso quedará registrado en el método indicado.'}
+                  {returnReason === 'damaged'
+                    ? 'Producto dañado: no se devuelve dinero. Sale del stock como merma, valuada al costo.'
+                    : refundPaymentMethods.find(m => m.name === returnRefundMethod)?.type === 'cash'
+                      ? 'Se restocará inventario y se registrará la salida de efectivo en la caja abierta.'
+                      : 'Se restocará inventario. El reembolso quedará registrado en el método indicado.'}
                 </div>
 
                 {returnError && (
@@ -627,17 +639,26 @@ export default function VentasCajero({ session }: Props) {
                       try {
                         const allItems = returnSale.items ?? [];
                         const selectedIdxs = [...returnSelected];
+                        // Mirror the admin panel: the destination is baked into the
+                        // reason. A change of mind restocks and refunds; a damaged
+                        // product leaves as merma with no refund. Send an explicit
+                        // disposition instead of relying on the backend to override
+                        // a hardcoded restock.
+                        const disposition: 'restock' | 'damaged' | 'discard' = returnReason === 'damaged' ? 'damaged' : 'restock';
                         const returnItems = selectedIdxs.map(origIdx => {
                           const it = allItems[origIdx];
                           const maxReturnable = Number(it.qty) - (it.returnedQty ?? 0);
                           const qty = Math.min(returnQtys[origIdx] ?? maxReturnable, maxReturnable);
                           const fullQty = Number(it.qty) || 1;
-                          const refundAmount = Number(it.subtotal) / fullQty * qty;
+                          const refundAmount = disposition === 'damaged'
+                            ? 0
+                            : Math.round((Number(it.subtotal) / fullQty * qty) * 100) / 100;
                           return {
                             saleItemId: it.id,
                             qty,
-                            refundAmount: Math.round(refundAmount * 100) / 100,
-                            restock: true,
+                            refundAmount,
+                            disposition,
+                            restock: disposition === 'restock',
                           };
                         });
                         const partial = !allItems.every((it, origIdx) => {
