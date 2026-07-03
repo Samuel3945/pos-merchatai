@@ -460,7 +460,7 @@ export const api = {
       payload: {
         reason: string;
         refundMethod: string;
-        items: Array<{ saleItemId: string; qty: number; refundAmount: number; restock: boolean }>;
+        items: Array<{ saleItemId: string; qty: number; refundAmount: number; disposition?: 'restock' | 'damaged' | 'discard'; restock?: boolean }>;
         notes?: string;
         partial: boolean;
       },
