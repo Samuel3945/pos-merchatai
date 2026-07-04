@@ -231,7 +231,7 @@ export default function ClientesCajero() {
 
               {/* Tabs */}
               <div className="flex gap-1 mt-4 bg-surface-2 p-1 rounded-xl">
-                {([['compras', 'Compras'], ['fiado', 'Fiado'], ['domicilios', 'Domicilios']] as [DetailTab, string][]).map(([id, label]) => (
+                {([['compras', 'Compras'], ['fiado', 'Crédito'], ['domicilios', 'Domicilios']] as [DetailTab, string][]).map(([id, label]) => (
                   <button key={id} onClick={() => setTab(id)}
                     className={`flex-1 h-8 rounded-lg text-xs font-bold transition-colors ${tab === id ? 'bg-primary-soft text-primary' : 'text-ink-3 hover:text-ink'}`}>
                     {label}
