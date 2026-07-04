@@ -5,3 +5,7 @@ dist
 .env
 .env.*
 !.env.example
+
+# Capacitor: proyecto nativo Android regenerable con `npx cap add android`
+android
+*.apk

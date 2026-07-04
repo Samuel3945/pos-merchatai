@@ -23,6 +23,29 @@ o servirse desde cualquier CDN estático. **No requiere servidor propio**;
 toda la lógica vive en el software base **MerchantAI** (expone `/api/pos/*`),
 configurado vía `VITE_API_URL` (ver `.env.example`).
 
+## APK Android (offline-first)
+
+El POS se empaqueta como APK con **Capacitor**: el `dist/` queda embebido en el
+APK y el WebView carga los assets **localmente** (`capacitor://localhost`), así
+que el app shell (HTML/JS/CSS + fuentes) abre **sin internet**. Las fuentes están
+auto-hospedadas en `public/fonts/` (sin Google Fonts CDN) para que iconos y
+tipografía se rendericen offline.
+
+```bash
+# Requiere JDK 17+, Android SDK (ANDROID_SDK_ROOT) y Gradle.
+VITE_API_URL=https://app.mymerchantai.com bash scripts/build-apk.sh
+# → android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+**Modelo offline:** el primer arranque necesita internet para el login y para
+descargar el catálogo (se cachea en IndexedDB, ver `src/lib/offline.ts`). A
+partir de ahí el cajero **vende sin conexión** — el catálogo sale de la caché y
+las ventas se **encolan** localmente, sincronizándose solas al volver la red
+(badge "En línea / Sin conexión" en la barra del POS).
+
+El proyecto nativo `android/` es regenerable (`npx cap add android`) y está
+git-ignorado; la fuente de verdad son `capacitor.config.ts` + `dist/`.
+
 ## Estructura
 
 ```
