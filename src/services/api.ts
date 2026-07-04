@@ -412,6 +412,14 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ cashierId, currentPin, newPin }),
       }),
+    // Public — sets a cashier's OWN PIN via the one-time activation link the admin
+    // sent over WhatsApp. No device token/session needed (the link IS the auth),
+    // so it works on the standalone /activar screen before any POS login.
+    activate: (token: string, pin: string) =>
+      req<{ ok: boolean; name: string }>('/pos/cashiers/activate', {
+        method: 'POST',
+        body: JSON.stringify({ token, pin }),
+      }),
   },
 
   pos: {

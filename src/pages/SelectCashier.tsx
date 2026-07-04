@@ -54,8 +54,17 @@ export default function SelectCashier({ cashLabel, onSelected, onLogout }: Props
   }
 
   function pick(c: CashierLite) {
-    if (c.hasPin) setMode({ kind: 'pin', cashier: c });
-    else enterAs(c, '');
+    // Entrar SIEMPRE exige el PIN propio del empleado. Sin PIN activado no se
+    // puede entrar (evita suplantación): el empleado debe activarlo con el enlace
+    // que el admin le envió por WhatsApp.
+    if (c.hasPin) {
+      setError(null);
+      setMode({ kind: 'pin', cashier: c });
+    } else {
+      setError(
+        `${c.name}: aún no activas tu PIN. Revisa tu WhatsApp o pídele al admin que reenvíe el enlace.`,
+      );
+    }
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -132,11 +141,20 @@ export default function SelectCashier({ cashLabel, onSelected, onLogout }: Props
                       <span className="material-symbols-outlined text-primary text-[16px] absolute top-2 right-2">lock</span>
                     )}
                   </button>
-                  <button onClick={() => setMode({ kind: 'setpin', cashier: c })}
-                    className="mt-2 w-full text-ink-3 hover:text-primary text-[11px] flex items-center justify-center gap-1 transition-colors">
-                    <span className="material-symbols-outlined text-[14px]">{c.hasPin ? 'key' : 'add_moderator'}</span>
-                    {c.hasPin ? 'Cambiar PIN' : 'Proteger con PIN'}
-                  </button>
+                  {c.hasPin
+                    ? (
+                        <button onClick={() => setMode({ kind: 'setpin', cashier: c })}
+                          className="mt-2 w-full text-ink-3 hover:text-primary text-[11px] flex items-center justify-center gap-1 transition-colors">
+                          <span className="material-symbols-outlined text-[14px]">key</span>
+                          Cambiar PIN
+                        </button>
+                      )
+                    : (
+                        <div className="mt-2 w-full text-amber-500 text-[11px] flex items-center justify-center gap-1">
+                          <span className="material-symbols-outlined text-[14px]">schedule</span>
+                          Pendiente de activar
+                        </div>
+                      )}
                 </div>
               ))}
             </div>
