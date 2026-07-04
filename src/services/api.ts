@@ -317,6 +317,60 @@ export interface Customer {
   last_purchase_at: string | null;
 }
 
+// ── Customer detail (ficha de cliente) ───────────────────────────────────────
+// Shape returned by GET /pos/customers/{id}/detail — the SAME contract the
+// dashboard renders. Dates arrive as ISO strings (JSON), numeric money columns
+// (totalSpent/total) as strings; counters/amounts already parsed to numbers.
+
+export interface CustomerDetailSale {
+  id: string;
+  saleNumber: number | null;
+  date: string;
+  total: string;
+  paymentType: string;
+  status: string;
+  fullyReturned: boolean;
+}
+
+export interface CustomerDetailAbono {
+  id: string;
+  date: string;
+  amount: number;
+  method: string | null;
+}
+
+export interface CustomerDetailDelivery {
+  id: string;
+  date: string;
+  total: string;
+  status: string;
+}
+
+export interface CustomerDetail {
+  profile: {
+    id: string;
+    name: string;
+    documentId: string | null;
+    whatsapp: string | null;
+    email: string | null;
+    address: string | null;
+    notes: string | null;
+    totalSpent: string;
+    lastPurchaseAt: string | null;
+    createdAt: string;
+  };
+  kpis: {
+    totalSpent: string;
+    purchaseCount: number;
+    avgTicket: number;
+    lastPurchaseAt: string | null;
+    creditBalance: number;
+  };
+  recentSales: CustomerDetailSale[];
+  credito: { balance: number; recentAbonos: CustomerDetailAbono[] };
+  deliveries: CustomerDetailDelivery[];
+}
+
 export interface SupplierLite {
   id: string;
   name: string;
@@ -523,6 +577,9 @@ export const api = {
         method: 'PUT',
         body: JSON.stringify(data),
       }),
+    // Ficha de cliente: KPIs + linked sales / abonos / deliveries for the
+    // slide-over panel. Same contract as the dashboard's getCustomerDetail.
+    detail: (id: string) => req<CustomerDetail>(`/pos/customers/${id}/detail`),
   },
 
   appConfig: {
