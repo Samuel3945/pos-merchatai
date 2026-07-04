@@ -102,9 +102,10 @@ export default function VentasCajero({ session }: Props) {
   const [returnSelected, setReturnSelected] = useState<Set<number>>(new Set());
   const [returnQtys, setReturnQtys] = useState<Record<number, number>>({});
   const [returnReason, setReturnReason] = useState<string>('customer_request');
-  const [returnRefundMethod, setReturnRefundMethod] = useState<string>('');
+  // Damaged returns ask replacement vs money-back. Refunds are always in cash —
+  // there is no refund-method picker anymore.
+  const [damagedResolution, setDamagedResolution] = useState<'replace' | 'refund'>('replace');
   const [returnError, setReturnError] = useState<string>('');
-  const [refundPaymentMethods, setRefundPaymentMethods] = useState<PaymentMethod[]>([]);
   // Payment correction — reuses the POS checkout so the cashier re-enters the
   // method split (mixto / change of method) the same way they charge.
   const [correctSale, setCorrectSale] = useState<Sale | null>(null);
@@ -438,24 +439,8 @@ export default function VentasCajero({ session }: Props) {
                                         });
                                         setReturnSelected(selectable);
                                         setReturnQtys(qtys);
-                                        api.pos.paymentMethods().then(methods => {
-                                          const systemEfectivo: PaymentMethod = {
-                                            id: 'system-cash', name: 'Efectivo', type: 'cash',
-                                            icon: 'payments', active: true,
-                                            sort_order: 0, details: null, description: null,
-                                          };
-                                          const rest = (Array.isArray(methods) ? methods : [])
-                                            .filter(m => m.active && m.type !== 'credito' && m.type !== 'cash');
-                                          setRefundPaymentMethods([systemEfectivo, ...rest]);
-                                          setReturnRefundMethod('Efectivo');
-                                        }).catch(() => {
-                                          setRefundPaymentMethods([{
-                                            id: 'system-cash', name: 'Efectivo', type: 'cash',
-                                            icon: 'payments', active: true,
-                                            sort_order: 0, details: null, description: null,
-                                          }]);
-                                          setReturnRefundMethod('Efectivo');
-                                        });
+                                        setReturnReason('customer_request');
+                                        setDamagedResolution('replace');
                                       }}
                                       className="flex items-center gap-1 text-[10px] font-semibold text-warn bg-warn-soft/40 hover:bg-warn-soft/70 px-2 py-1 rounded-lg transition-colors">
                                       <span className="material-symbols-outlined text-[12px]">undo</span>
@@ -573,30 +558,39 @@ export default function VentasCajero({ session }: Props) {
                   })}
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">
-                      Motivo <span className="text-danger">*</span>
-                    </label>
-                    <select value={returnReason} onChange={e => setReturnReason(e.target.value)}
-                      className="w-full bg-bg border border-line rounded-xl px-3 py-2.5 text-ink text-sm focus:border-primary">
-                      {RETURN_REASONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">
-                      Reembolso en <span className="text-danger">*</span>
-                    </label>
-                    <select value={returnRefundMethod} onChange={e => setReturnRefundMethod(e.target.value)}
-                      className="w-full bg-bg border border-line rounded-xl px-3 py-2.5 text-ink text-sm focus:border-primary"
-                      disabled={refundPaymentMethods.length === 0}>
-                      {refundPaymentMethods.length === 0
-                        ? <option value="">Cargando...</option>
-                        : refundPaymentMethods.map(m => <option key={m.id} value={m.name}>{m.name}</option>)
-                      }
-                    </select>
-                  </div>
+                <div>
+                  <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">
+                    Motivo <span className="text-danger">*</span>
+                  </label>
+                  <select value={returnReason} onChange={e => { setReturnReason(e.target.value); setDamagedResolution('replace'); }}
+                    className="w-full bg-bg border border-line rounded-xl px-3 py-2.5 text-ink text-sm focus:border-primary">
+                    {RETURN_REASONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                  </select>
                 </div>
+
+                {returnReason === 'damaged' && (
+                  <div>
+                    <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">
+                      ¿Qué quiere el cliente? <span className="text-danger">*</span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {([
+                        { value: 'replace', label: 'Un producto nuevo', icon: 'swap_horiz' },
+                        { value: 'refund',  label: 'Reembolso',         icon: 'payments' },
+                      ] as const).map(opt => (
+                        <button key={opt.value} type="button"
+                          onClick={() => setDamagedResolution(opt.value)}
+                          className={`flex items-center justify-center gap-1.5 h-11 rounded-xl border text-sm font-semibold transition-colors ${
+                            damagedResolution === opt.value
+                              ? 'bg-primary-soft/30 border-primary/40 text-primary'
+                              : 'bg-bg border-line text-ink-3 hover:border-primary/30'}`}>
+                          <span className="material-symbols-outlined text-[18px]">{opt.icon}</span>
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">
@@ -609,9 +603,11 @@ export default function VentasCajero({ session }: Props) {
 
                 <div className="bg-warn-soft/20 border border-warn/20 rounded-xl p-3 text-warn text-xs">
                   <span className="material-symbols-outlined text-[14px] align-middle mr-1">info</span>
-                  {refundPaymentMethods.find(m => m.name === returnRefundMethod)?.type === 'cash'
-                    ? 'Se restocará inventario y se registrará la salida de efectivo en la caja abierta.'
-                    : 'Se restocará inventario. El reembolso quedará registrado en el método indicado.'}
+                  {returnReason === 'damaged'
+                    ? (damagedResolution === 'replace'
+                        ? 'Se entrega un producto nuevo. El dañado se registra como pérdida (merma) y no sale dinero de la caja.'
+                        : 'Se devuelve el dinero en efectivo (salida de la caja abierta). El producto dañado no vuelve al inventario.')
+                    : 'La mercancía vuelve al inventario y se devuelve el dinero en efectivo (salida de la caja abierta).'}
                 </div>
 
                 {returnError && (
@@ -647,7 +643,8 @@ export default function VentasCajero({ session }: Props) {
                         });
                         await api.sales.processReturn(returnSale.id, {
                           reason: returnReason,
-                          refundMethod: returnRefundMethod,
+                          refundMethod: 'Efectivo',
+                          damagedResolution: returnReason === 'damaged' ? damagedResolution : undefined,
                           notes: returnNotes || undefined,
                           partial,
                           items: returnItems,
