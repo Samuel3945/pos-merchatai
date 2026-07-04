@@ -10,6 +10,13 @@ interface Props { session: PosSession; }
 
 const LIMIT = 50;
 
+// Material icon for a payment-method type, used by the filter chips.
+function iconForMethodType(type: PaymentMethod['type']): string {
+  if (type === 'cash') return 'payments';
+  if (type === 'credito') return 'handshake';
+  return 'swap_horiz'; // transfer / nequi / llave
+}
+
 function paymentBadgeClass(pt: string) {
   const p = (pt || '').toLowerCase();
   if (p === 'efectivo' || p === 'cash') return 'bg-success-soft text-success';
@@ -86,7 +93,11 @@ export default function VentasCajero({ session }: Props) {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('');
   const [range, setRange] = useState<DateRange>(defaultRange);
-  const [hasTransfer, setHasTransfer] = useState(false);
+  // Active payment methods drive the filter chips. Their `name` is exactly what
+  // `sales.paymentType` stores (the POS books a sale as `payments[0].method`),
+  // so a chip's value must be the method name for the backend's exact-match
+  // `payment_type` filter to hit. Credito is the one exception (regex-matched).
+  const [methods, setMethods] = useState<PaymentMethod[]>([]);
   const dateStart = toYMD(range.start);
   const dateEnd = toYMD(range.end);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -116,10 +127,9 @@ export default function VentasCajero({ session }: Props) {
   const [correctLoading, setCorrectLoading] = useState(false);
 
   useEffect(() => {
-    api.pos.paymentMethods().then(methods => {
-      const transferTypes = ['transfer', 'nequi', 'llave'];
-      setHasTransfer((methods || []).some(m => m.active && transferTypes.includes(m.type)));
-    }).catch(() => {});
+    api.pos.paymentMethods()
+      .then(ms => setMethods((ms || []).filter(m => m.active)))
+      .catch(() => {});
   }, []);
 
   const load = useCallback(async (
@@ -149,7 +159,10 @@ export default function VentasCajero({ session }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [cashierId]);
+    // `paymentFilter` is read from closure above, so `load` must be recreated
+    // when it changes — otherwise the effect below re-runs with a stale value
+    // and the request never carries the newly-selected method.
+  }, [cashierId, paymentFilter]);
 
   useEffect(() => {
     load(debouncedSearch, dateStart, dateEnd, page);
@@ -252,21 +265,30 @@ export default function VentasCajero({ session }: Props) {
             )}
           </div>
 
-          {/* Payment method chips */}
+          {/* Payment method chips. Chip values are the method NAME (what the
+              backend exact-matches against sales.paymentType); the credito chip
+              sends 'credito', which the backend matches by regex across all
+              credito/fiado variants. */}
           <div className="flex items-center gap-2 flex-wrap">
             {([
-              { value: '',          label: 'Todos',         icon: 'all_inclusive',  show: true },
-              { value: 'efectivo',  label: 'Efectivo',      icon: 'payments',       show: true },
-              { value: 'transfer',  label: 'Transferencia', icon: 'swap_horiz',     show: hasTransfer },
-              { value: 'credito',     label: 'Crédito',         icon: 'handshake',      show: true },
-            ] as const).filter(opt => opt.show).map(opt => (
-              <button key={opt.value}
+              { value: '', label: 'Todos', icon: 'all_inclusive', kind: 'all' as const },
+              ...methods
+                .filter(m => m.type !== 'credito')
+                .map(m => ({
+                  value: m.name,
+                  label: m.name,
+                  icon: iconForMethodType(m.type),
+                  kind: (m.type === 'cash' ? 'cash' : 'transfer') as 'cash' | 'transfer',
+                })),
+              { value: 'credito', label: 'Crédito', icon: 'handshake', kind: 'credito' as const },
+            ]).map(opt => (
+              <button key={opt.value || 'all'}
                 onClick={() => { setPaymentFilter(opt.value); setPage(0); }}
                 className={`flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold transition-colors border ${
                   paymentFilter === opt.value
-                    ? opt.value === ''         ? 'bg-surface border-primary text-primary'
-                    : opt.value === 'efectivo' ? 'bg-success-soft/60 border-success text-success'
-                    : opt.value === 'credito'    ? 'bg-warn-soft/60 border-warn text-warn'
+                    ? opt.kind === 'all'      ? 'bg-surface border-primary text-primary'
+                    : opt.kind === 'cash'     ? 'bg-success-soft/60 border-success text-success'
+                    : opt.kind === 'credito'  ? 'bg-warn-soft/60 border-warn text-warn'
                     : 'bg-primary-soft/60 border-primary text-primary'
                     : 'bg-transparent border-line text-ink-3 hover:border-line-strong hover:text-ink-2'
                 }`}>
