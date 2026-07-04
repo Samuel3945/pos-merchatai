@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import Login from './pages/Login';
+import Activate from './pages/Activate';
 import SelectCashier from './pages/SelectCashier';
 import Pos from './pages/Pos';
 import CajaCajero from './pages/CajaCajero';
@@ -118,6 +119,13 @@ export default function App() {
   }
 
   const toggleTheme = () => setTheme(t => (t === 'dark' ? 'light' : 'dark'));
+
+  // Standalone activation deep-link (/activar?token=…): the employee sets their
+  // OWN PIN before any POS login. Handled outside the session screens — the
+  // one-time token in the URL is the only credential it needs.
+  if (window.location.pathname.replace(/\/+$/, '').endsWith('/activar')) {
+    return <Activate />;
+  }
 
   if (screen.kind === 'login') {
     return <Login onLoggedIn={onLoggedIn} />;
