@@ -460,6 +460,9 @@ export const api = {
       payload: {
         reason: string;
         refundMethod: string;
+        // Only for reason 'damaged': 'replace' = exchange (no money back),
+        // 'refund' = money back in cash. Ignored for other reasons.
+        damagedResolution?: 'replace' | 'refund';
         items: Array<{ saleItemId: string; qty: number; refundAmount: number; restock: boolean }>;
         notes?: string;
         partial: boolean;
