@@ -8,8 +8,27 @@ import {
   type EntryMotivo,
   type ExitMotivo,
 } from '../lib/cash-motivos';
+import {
+  queueCourierMove,
+  getQueuedCourierMoves,
+  syncCourierQueue,
+  type QueuedCourierMove,
+} from '../lib/offline';
 
 const COP = (n: number) => '$' + Math.round(Number(n) || 0).toLocaleString('es-CO');
+
+// Clave de caché del último estado conocido del bolsillo (para operar offline).
+const WALLET_CACHE_KEY = 'pos_courier_wallet_cache';
+
+// Una caída de red se manifiesta como TypeError ("Failed to fetch") en el WebView
+// o como un string de host/conexión con CapacitorHttp (APK nativa). Tratamos ambos
+// como "sin conexión" para encolar el movimiento en vez de perderlo. Mismo criterio
+// que Pos.tsx.
+function isNetworkError(e: any): boolean {
+  if (e instanceof TypeError) return true;
+  const msg = String(e?.message ?? e ?? '').toLowerCase();
+  return /unable to resolve host|no address associated|failed to connect|network|timed? ?out|\bconnection\b|offline|err_internet|err_network|err_name_not_resolved|enotfound/.test(msg);
+}
 
 // Revela el cuadre DESPUÉS de confirmar el conteo a ciegas: >0 sobra, <0 falta.
 function DiffBanner({ diff, zeroLabel }: { diff: number; zeroLabel: string }) {
@@ -104,9 +123,15 @@ export default function CajaCajero() {
   // facturas o si se registró como gasto sin facturas pendientes.
   const [moveOutcome, setMoveOutcome] = useState<MovementOutcome | null>(null);
 
-  // Bolsillo del domiciliario (préstamos caja ↔ domiciliario).
+  // Bolsillo del domiciliario (préstamos caja ↔ domiciliario). Los saldos que se
+  // guardan aquí son los del ÚLTIMO estado conocido del servidor (o su caché
+  // offline); los movimientos en cola se aplican encima al mostrar.
   const [walletMe, setWalletMe]         = useState<CourierWalletMe | null>(null);
   const [couriers, setCouriers]         = useState<CourierWalletBalance[]>([]);
+  const [queuedMoves, setQueuedMoves]   = useState<QueuedCourierMove[]>([]);
+  // Conexión: solo cambia a offline cuando el evento dispara explícitamente
+  // (navigator.onLine es poco confiable al montar).
+  const [online, setOnline]             = useState(true);
   // Modal "Préstamo a domiciliario" (base_from_caja).
   const [showLoan, setShowLoan]         = useState(false);
   const [loanCourierId, setLoanCourierId] = useState('');
@@ -117,13 +142,50 @@ export default function CajaCajero() {
   const [handoverAmount, setHandoverAmount] = useState('');
   const [handoverBusy, setHandoverBusy] = useState(false);
 
+  const refreshQueued = useCallback(async () => {
+    try { setQueuedMoves(await getQueuedCourierMoves()); } catch { /* noop */ }
+  }, []);
+
   const loadWallet = useCallback(async () => {
     try {
       const w = await api.courierWallet.overview();
       setWalletMe(w.me);
       setCouriers(w.couriers || []);
-    } catch { /* sin conexión / sin permiso: ocultamos el bolsillo, no rompemos la caja */ }
-  }, []);
+      // Cachea el último estado conocido para poder operar sin conexión.
+      try { localStorage.setItem(WALLET_CACHE_KEY, JSON.stringify(w)); } catch { /* noop */ }
+    } catch {
+      // Sin conexión: usa el último estado conocido para no romper la caja.
+      try {
+        const raw = localStorage.getItem(WALLET_CACHE_KEY);
+        if (raw) {
+          const w = JSON.parse(raw) as { me: CourierWalletMe | null; couriers: CourierWalletBalance[] };
+          setWalletMe(w.me);
+          setCouriers(w.couriers || []);
+        }
+      } catch { /* noop */ }
+    }
+    refreshQueued();
+  }, [refreshQueued]);
+
+  // Reenvía la cola del bolsillo (idempotente por clientMovementId en el backend).
+  const syncCourier = useCallback(async () => {
+    const pending = await getQueuedCourierMoves().catch(() => []);
+    if (pending.length === 0) { return; }
+    await syncCourierQueue(
+      async (m) => {
+        await api.courierWallet.move({
+          direction: m.direction,
+          amount: m.amount,
+          courierId: m.courierId,
+          note: m.note,
+          clientMovementId: m.clientMovementId,
+        });
+      },
+      () => { /* se conserva en cola para el próximo intento */ },
+    );
+    await refreshQueued();
+    loadWallet();
+  }, [refreshQueued, loadWallet]);
 
   const resetMovementFields = () => {
     setMoveReason('');
@@ -147,6 +209,20 @@ export default function CajaCajero() {
 
   useEffect(() => { load(); loadWallet(); }, [load, loadWallet]);
 
+  // Intento inicial de drenar la cola del bolsillo (por si quedaron movimientos
+  // de una sesión offline previa) y reintento en cada reconexión.
+  useEffect(() => {
+    syncCourier();
+    const onOnline = () => { setOnline(true); syncCourier(); load(); };
+    const onOffline = () => setOnline(false);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, [syncCourier, load]);
+
   const showOk = (msg: string) => { setSuccess(msg); setTimeout(() => setSuccess(''), 3000); };
 
   // UUID de dispositivo para idempotencia offline (mismo patrón que las ventas).
@@ -154,43 +230,52 @@ export default function CajaCajero() {
     (globalThis.crypto?.randomUUID?.() ??
       `${Date.now()}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`);
 
-  // Caja → domiciliario: la caja le presta base para dar vuelto.
+  // Caja → domiciliario: la caja le presta base para dar vuelto. Funciona offline:
+  // si la red falla, se encola y se sincroniza al reconectar (idempotente).
   const handleLoan = async () => {
     const amt = parseFloat(loanAmount);
     if (!amt || amt <= 0) { setError('Ingresa un monto válido'); return; }
     if (!loanCourierId) { setError('Elige a quién le prestas'); return; }
     setLoanBusy(true); setError('');
+    const clientMovementId = genUuid();
+    const courierName = couriers.find(c => c.courierId === loanCourierId)?.name;
     try {
-      await api.courierWallet.move({
-        direction: 'base_from_caja',
-        amount: amt,
-        courierId: loanCourierId,
-        clientMovementId: genUuid(),
-      });
+      await api.courierWallet.move({ direction: 'base_from_caja', amount: amt, courierId: loanCourierId, clientMovementId });
       setShowLoan(false); setLoanAmount(''); setLoanCourierId('');
       showOk('Préstamo registrado');
       load(); loadWallet();
-    } catch (e: any) { setError(e.message || 'No se pudo registrar el préstamo'); }
+    } catch (e: any) {
+      if (isNetworkError(e)) {
+        await queueCourierMove({ direction: 'base_from_caja', amount: amt, courierId: loanCourierId, courierName, clientMovementId });
+        setShowLoan(false); setLoanAmount(''); setLoanCourierId('');
+        showOk('Guardado sin conexión — se sincroniza al reconectar');
+        setOnline(false); refreshQueued();
+      } else { setError(e.message || 'No se pudo registrar el préstamo'); }
+    }
     finally { setLoanBusy(false); }
   };
 
-  // Domiciliario → caja: entrega efectivo (billetes grandes) a la caja.
+  // Domiciliario → caja: entrega efectivo (billetes grandes) a la caja. Offline igual.
   const handleHandover = async () => {
     const amt = parseFloat(handoverAmount);
     if (!amt || amt <= 0) { setError('Ingresa un monto válido'); return; }
     if (!walletMe) { return; }
     setHandoverBusy(true); setError('');
+    const clientMovementId = genUuid();
+    const courierId = walletMe.courierId;
     try {
-      await api.courierWallet.move({
-        direction: 'handover_to_caja',
-        amount: amt,
-        courierId: walletMe.courierId,
-        clientMovementId: genUuid(),
-      });
+      await api.courierWallet.move({ direction: 'handover_to_caja', amount: amt, courierId, clientMovementId });
       setShowHandover(false); setHandoverAmount('');
       showOk('Entrega registrada');
       load(); loadWallet();
-    } catch (e: any) { setError(e.message || 'No se pudo registrar la entrega'); }
+    } catch (e: any) {
+      if (isNetworkError(e)) {
+        await queueCourierMove({ direction: 'handover_to_caja', amount: amt, courierId, clientMovementId });
+        setShowHandover(false); setHandoverAmount('');
+        showOk('Guardado sin conexión — se sincroniza al reconectar');
+        setOnline(false); refreshQueued();
+      } else { setError(e.message || 'No se pudo registrar la entrega'); }
+    }
     finally { setHandoverBusy(false); }
   };
 
@@ -306,6 +391,16 @@ export default function CajaCajero() {
   const motivosForDir = movDirection === 'out' ? EXIT_MOTIVOS : ENTRY_MOTIVOS;
   const reasonPresets = REASON_PRESETS[motivo] || [];
 
+  // Saldos a mostrar = último conocido del servidor + movimientos aún en cola
+  // (offline). base_from_caja suma; handover_to_caja resta al mismo domiciliario.
+  const queuedDeltaFor = (courierId: string) =>
+    queuedMoves
+      .filter(m => m.courierId === courierId)
+      .reduce((acc, m) => acc + (m.direction === 'base_from_caja' ? m.amount : -m.amount), 0);
+  const displayCouriers = couriers.map(c => ({ ...c, balance: c.balance + queuedDeltaFor(c.courierId) }));
+  const displayMeBalance = walletMe ? walletMe.balance + queuedDeltaFor(walletMe.courierId) : 0;
+  const pendingCount = queuedMoves.length;
+
   const supplierQ = supplierQuery.trim().toLowerCase();
   const filteredSuppliers = supplierQ
     ? suppliers.filter(s =>
@@ -332,6 +427,16 @@ export default function CajaCajero() {
 
         {success && <div className="px-4 py-2.5 bg-success-soft border border-success/40 text-success rounded-xl text-sm font-semibold">✓ {success}</div>}
         {error   && <div className="px-4 py-2.5 bg-danger-soft/30 border border-danger text-danger rounded-xl text-sm">{error}</div>}
+
+        {/* Cola offline del bolsillo: movimientos guardados sin conexión, por subir */}
+        {pendingCount > 0 && (
+          <button onClick={syncCourier} disabled={!online}
+            className="w-full px-4 py-2.5 bg-warn-soft border border-warn/40 text-warn rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5 disabled:opacity-70">
+            <span className="material-symbols-outlined text-[16px]">{online ? 'sync' : 'cloud_off'}</span>
+            {pendingCount} movimiento{pendingCount !== 1 ? 's' : ''} del domiciliario sin sincronizar
+            {online ? ' · toca para reintentar' : ''}
+          </button>
+        )}
 
         {/* Status card */}
         <div className={`rounded-2xl p-5 border ${isOpen ? 'bg-success-soft/20 border-success/30' : 'bg-surface border-line'}`}>
@@ -381,7 +486,7 @@ export default function CajaCajero() {
                   <span className="material-symbols-outlined text-[15px]">two_wheeler</span>
                   Llevas encima
                 </div>
-                <div className="font-black text-2xl text-primary tabular-nums">{COP(walletMe.balance)}</div>
+                <div className="font-black text-2xl text-primary tabular-nums">{COP(displayMeBalance)}</div>
                 <div className="text-ink-3 text-xs mt-1">Efectivo tuyo por entregar a caja</div>
               </div>
               <button onClick={() => { setHandoverAmount(''); setError(''); setShowHandover(true); }}
@@ -796,7 +901,7 @@ export default function CajaCajero() {
             <div>
               <div className="text-ink-3 text-[11px] uppercase tracking-wider font-bold mb-2">¿A quién?</div>
               <div className="space-y-2">
-                {couriers.map(c => (
+                {displayCouriers.map(c => (
                   <button key={c.courierId} onClick={() => setLoanCourierId(c.courierId)}
                     className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm transition-colors ${
                       loanCourierId === c.courierId
