@@ -251,6 +251,23 @@ export interface CashierLite {
   hasPin: boolean;
 }
 
+// Bolsillo del domiciliario: el efectivo que lleva encima (saldo derivado del
+// ledger courier_cash_movements en el backend).
+export interface CourierWalletBalance {
+  courierId: string;
+  name:      string;
+  balance:   number;
+}
+
+export interface CourierWalletMe {
+  courierId: string;
+  // El operador activo tiene perfil de domiciliario (módulo 'delivery').
+  isCourier: boolean;
+  balance:   number;
+}
+
+export type CourierWalletDirection = 'base_from_caja' | 'handover_to_caja';
+
 export interface MeResponse {
   cash: {
     id:           string;
@@ -472,6 +489,28 @@ export const api = {
       req<CashMovement & MovementOutcome>('/pos/cash/movement', {
         method: 'POST',
         body: JSON.stringify({ type, amount, reason, supplierId: supplierId ?? null }),
+      }),
+  },
+
+  // Bolsillo del domiciliario (préstamos caja ↔ domiciliario).
+  courierWallet: {
+    // { me, couriers }: bolsillo del operador activo + domiciliarios activos.
+    overview: () =>
+      req<{ me: CourierWalletMe | null; couriers: CourierWalletBalance[] }>(
+        '/pos/courier-wallet',
+      ),
+    // base_from_caja: la caja le presta base al domiciliario.
+    // handover_to_caja: el domiciliario entrega efectivo a la caja.
+    move: (input: {
+      direction: CourierWalletDirection;
+      amount: number;
+      courierId: string;
+      note?: string;
+      clientMovementId?: string;
+    }) =>
+      req<{ balance: number }>('/pos/courier-wallet', {
+        method: 'POST',
+        body: JSON.stringify(input),
       }),
   },
 

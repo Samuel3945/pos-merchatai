@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { api, CashSession, CashMovement, CashMovementType, SupplierLite, SupplierOutstanding, MovementOutcome } from '../services/api';
+import { api, CashSession, CashMovement, CashMovementType, SupplierLite, SupplierOutstanding, MovementOutcome, CourierWalletMe, CourierWalletBalance } from '../services/api';
 import {
   ENTRY_MOTIVOS,
   EXIT_MOTIVOS,
@@ -104,6 +104,27 @@ export default function CajaCajero() {
   // facturas o si se registró como gasto sin facturas pendientes.
   const [moveOutcome, setMoveOutcome] = useState<MovementOutcome | null>(null);
 
+  // Bolsillo del domiciliario (préstamos caja ↔ domiciliario).
+  const [walletMe, setWalletMe]         = useState<CourierWalletMe | null>(null);
+  const [couriers, setCouriers]         = useState<CourierWalletBalance[]>([]);
+  // Modal "Préstamo a domiciliario" (base_from_caja).
+  const [showLoan, setShowLoan]         = useState(false);
+  const [loanCourierId, setLoanCourierId] = useState('');
+  const [loanAmount, setLoanAmount]     = useState('');
+  const [loanBusy, setLoanBusy]         = useState(false);
+  // Modal "Entregar a caja" del propio domiciliario (handover_to_caja).
+  const [showHandover, setShowHandover] = useState(false);
+  const [handoverAmount, setHandoverAmount] = useState('');
+  const [handoverBusy, setHandoverBusy] = useState(false);
+
+  const loadWallet = useCallback(async () => {
+    try {
+      const w = await api.courierWallet.overview();
+      setWalletMe(w.me);
+      setCouriers(w.couriers || []);
+    } catch { /* sin conexión / sin permiso: ocultamos el bolsillo, no rompemos la caja */ }
+  }, []);
+
   const resetMovementFields = () => {
     setMoveReason('');
     setSelectedSupplier(null);
@@ -124,9 +145,54 @@ export default function CajaCajero() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); loadWallet(); }, [load, loadWallet]);
 
   const showOk = (msg: string) => { setSuccess(msg); setTimeout(() => setSuccess(''), 3000); };
+
+  // UUID de dispositivo para idempotencia offline (mismo patrón que las ventas).
+  const genUuid = () =>
+    (globalThis.crypto?.randomUUID?.() ??
+      `${Date.now()}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`);
+
+  // Caja → domiciliario: la caja le presta base para dar vuelto.
+  const handleLoan = async () => {
+    const amt = parseFloat(loanAmount);
+    if (!amt || amt <= 0) { setError('Ingresa un monto válido'); return; }
+    if (!loanCourierId) { setError('Elige a quién le prestas'); return; }
+    setLoanBusy(true); setError('');
+    try {
+      await api.courierWallet.move({
+        direction: 'base_from_caja',
+        amount: amt,
+        courierId: loanCourierId,
+        clientMovementId: genUuid(),
+      });
+      setShowLoan(false); setLoanAmount(''); setLoanCourierId('');
+      showOk('Préstamo registrado');
+      load(); loadWallet();
+    } catch (e: any) { setError(e.message || 'No se pudo registrar el préstamo'); }
+    finally { setLoanBusy(false); }
+  };
+
+  // Domiciliario → caja: entrega efectivo (billetes grandes) a la caja.
+  const handleHandover = async () => {
+    const amt = parseFloat(handoverAmount);
+    if (!amt || amt <= 0) { setError('Ingresa un monto válido'); return; }
+    if (!walletMe) { return; }
+    setHandoverBusy(true); setError('');
+    try {
+      await api.courierWallet.move({
+        direction: 'handover_to_caja',
+        amount: amt,
+        courierId: walletMe.courierId,
+        clientMovementId: genUuid(),
+      });
+      setShowHandover(false); setHandoverAmount('');
+      showOk('Entrega registrada');
+      load(); loadWallet();
+    } catch (e: any) { setError(e.message || 'No se pudo registrar la entrega'); }
+    finally { setHandoverBusy(false); }
+  };
 
   const handleOpen = async () => {
     const amt = parseFloat(openAmount) || 0;
@@ -306,6 +372,27 @@ export default function CajaCajero() {
           )}
         </div>
 
+        {/* Bolsillo del domiciliario (cuando el operador activo es domiciliario) */}
+        {walletMe?.isCourier && (
+          <div className="rounded-2xl p-5 border bg-primary-soft/20 border-primary/30">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-ink-3 text-[11px] uppercase tracking-wider font-bold mb-1 flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[15px]">two_wheeler</span>
+                  Llevas encima
+                </div>
+                <div className="font-black text-2xl text-primary tabular-nums">{COP(walletMe.balance)}</div>
+                <div className="text-ink-3 text-xs mt-1">Efectivo tuyo por entregar a caja</div>
+              </div>
+              <button onClick={() => { setHandoverAmount(''); setError(''); setShowHandover(true); }}
+                className="h-11 px-4 bg-primary hover:bg-primary-ink text-white font-bold rounded-xl flex items-center justify-center gap-1.5 text-sm transition-colors active:scale-[0.98]">
+                <span className="material-symbols-outlined text-[18px]">payments</span>
+                Entregar a caja
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Actions */}
         {!isOpen ? (
           <button onClick={() => { setOpenResult(null); setError(''); setShowOpen(true); }}
@@ -314,17 +401,26 @@ export default function CajaCajero() {
             Abrir caja
           </button>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
-            <button onClick={() => { setShowMove(true); handleDirection('out'); }}
-              className="h-12 bg-primary hover:bg-primary-ink text-white font-bold rounded-xl flex items-center justify-center gap-1.5 text-sm transition-colors active:scale-[0.98]">
-              <span className="material-symbols-outlined text-[18px]">swap_horiz</span>
-              Movimiento
-            </button>
-            <button onClick={() => { setCloseResult(null); setError(''); setShowClose(true); }}
-              className="h-12 bg-surface border border-line-strong text-ink font-bold rounded-xl flex items-center justify-center gap-1.5 text-sm transition-colors hover:border-danger hover:text-danger active:scale-[0.98]">
-              <span className="material-symbols-outlined text-[18px]">lock</span>
-              Cerrar caja
-            </button>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => { setShowMove(true); handleDirection('out'); }}
+                className="h-12 bg-primary hover:bg-primary-ink text-white font-bold rounded-xl flex items-center justify-center gap-1.5 text-sm transition-colors active:scale-[0.98]">
+                <span className="material-symbols-outlined text-[18px]">swap_horiz</span>
+                Movimiento
+              </button>
+              <button onClick={() => { setCloseResult(null); setError(''); setShowClose(true); }}
+                className="h-12 bg-surface border border-line-strong text-ink font-bold rounded-xl flex items-center justify-center gap-1.5 text-sm transition-colors hover:border-danger hover:text-danger active:scale-[0.98]">
+                <span className="material-symbols-outlined text-[18px]">lock</span>
+                Cerrar caja
+              </button>
+            </div>
+            {couriers.length > 0 && (
+              <button onClick={() => { setLoanAmount(''); setLoanCourierId(couriers[0]?.courierId || ''); setError(''); setShowLoan(true); }}
+                className="w-full h-12 bg-surface border border-line-strong text-ink font-bold rounded-xl flex items-center justify-center gap-1.5 text-sm transition-colors hover:border-primary hover:text-primary active:scale-[0.98]">
+                <span className="material-symbols-outlined text-[18px]">volunteer_activism</span>
+                Prestar a domiciliario
+              </button>
+            )}
           </div>
         )}
 
@@ -681,6 +777,100 @@ export default function CajaCajero() {
             </div>
             </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal: prestar base a un domiciliario (caja → domiciliario) */}
+      {showLoan && (
+        <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+          <div className="bg-surface border border-line rounded-t-2xl sm:rounded-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold text-ink text-lg">Prestar a domiciliario</h2>
+              <button onClick={() => { setShowLoan(false); setError(''); }} className="text-ink-3 hover:text-ink">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <p className="text-ink-3 text-xs -mt-2">Le entregas base para que dé vuelto. Sale del cajón y queda a su nombre.</p>
+
+            <div>
+              <div className="text-ink-3 text-[11px] uppercase tracking-wider font-bold mb-2">¿A quién?</div>
+              <div className="space-y-2">
+                {couriers.map(c => (
+                  <button key={c.courierId} onClick={() => setLoanCourierId(c.courierId)}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm transition-colors ${
+                      loanCourierId === c.courierId
+                        ? 'bg-primary-soft/30 border-primary text-primary font-bold'
+                        : 'bg-surface-2 border-line text-ink'
+                    }`}>
+                    <span className="flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[18px]">two_wheeler</span>
+                      {c.name}
+                    </span>
+                    <span className="text-ink-3 text-xs tabular-nums">lleva {COP(c.balance)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-ink-3 text-[11px] uppercase tracking-wider font-bold mb-1">Monto</div>
+              <input type="number" inputMode="numeric" value={loanAmount} onChange={e => setLoanAmount(e.target.value)}
+                placeholder="0" autoFocus
+                className="w-full h-12 bg-bg border border-line rounded-xl px-4 text-ink text-lg font-bold tabular-nums outline-none focus:border-primary" />
+            </div>
+
+            {error && <div className="text-danger text-sm">{error}</div>}
+
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={handleLoan} disabled={loanBusy}
+                className="h-11 bg-primary-soft hover:bg-primary-soft disabled:opacity-40 text-primary font-bold rounded-xl transition-colors">
+                {loanBusy ? 'Guardando…' : 'Prestar'}
+              </button>
+              <button onClick={() => { setShowLoan(false); setError(''); }}
+                className="h-11 bg-surface-2 border border-line text-ink-2 font-semibold rounded-xl hover:bg-surface-3 transition-colors">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: el domiciliario entrega efectivo a la caja (domiciliario → caja) */}
+      {showHandover && walletMe && (
+        <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+          <div className="bg-surface border border-line rounded-t-2xl sm:rounded-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold text-ink text-lg">Entregar a caja</h2>
+              <button onClick={() => { setShowHandover(false); setError(''); }} className="text-ink-3 hover:text-ink">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="bg-surface-2 border border-line rounded-xl px-4 py-3">
+              <div className="text-ink-3 text-[11px] uppercase tracking-wider font-bold mb-0.5">Llevas encima</div>
+              <div className="text-ink font-black text-xl tabular-nums">{COP(walletMe.balance)}</div>
+            </div>
+
+            <div>
+              <div className="text-ink-3 text-[11px] uppercase tracking-wider font-bold mb-1">¿Cuánto entregas?</div>
+              <input type="number" inputMode="numeric" value={handoverAmount} onChange={e => setHandoverAmount(e.target.value)}
+                placeholder="0" autoFocus
+                className="w-full h-12 bg-bg border border-line rounded-xl px-4 text-ink text-lg font-bold tabular-nums outline-none focus:border-primary" />
+              <p className="text-ink-3 text-xs mt-1.5">Entrega los billetes grandes; quédate con los pequeños para dar vuelto.</p>
+            </div>
+
+            {error && <div className="text-danger text-sm">{error}</div>}
+
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={handleHandover} disabled={handoverBusy}
+                className="h-11 bg-primary-soft hover:bg-primary-soft disabled:opacity-40 text-primary font-bold rounded-xl transition-colors">
+                {handoverBusy ? 'Guardando…' : 'Entregar'}
+              </button>
+              <button onClick={() => { setShowHandover(false); setError(''); }}
+                className="h-11 bg-surface-2 border border-line text-ink-2 font-semibold rounded-xl hover:bg-surface-3 transition-colors">
+                Cancelar
+              </button>
+            </div>
           </div>
         </div>
       )}
