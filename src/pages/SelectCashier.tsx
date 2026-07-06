@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, setActiveCashier, type CashierLite } from '../services/api';
 
 interface Props {
@@ -178,6 +178,28 @@ function PinPad({
 }) {
   const [pin, setPin] = useState('');
   const keys = ['1','2','3','4','5','6','7','8','9','','0','del'];
+
+  // Teclado físico (PC): dígitos escriben, Backspace borra, Enter confirma.
+  const pinRef = useRef(pin);
+  pinRef.current = pin;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (busy) return;
+      if (/^[0-9]$/.test(e.key)) {
+        e.preventDefault();
+        setPin(p => (p.length < 8 ? p + e.key : p));
+      } else if (e.key === 'Backspace') {
+        e.preventDefault();
+        setPin(p => p.slice(0, -1));
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (pinRef.current.length >= 4) onSubmit(pinRef.current);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [busy, onSubmit]);
+
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-bg">
       <div className="w-full max-w-xs bg-surface border border-line rounded-3xl p-6">
@@ -222,7 +244,11 @@ function SetPin({ cashier, onDone, onCancel }: {
   onCancel: () => void;
 }) {
   const [currentPin, setCurrentPin] = useState('');
-  const [step, setStep] = useState<'current' | 'new'>(cashier.hasPin ? 'current' : 'new');
+  const [newPin, setNewPin] = useState('');
+  // 'current' (PIN viejo) → 'new' (PIN nuevo) → 'verify' (confirmar el nuevo).
+  const [step, setStep] = useState<'current' | 'new' | 'verify'>(
+    cashier.hasPin ? 'current' : 'new',
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -236,23 +262,42 @@ function SetPin({ cashier, onDone, onCancel }: {
       setError(e instanceof Error ? e.message : 'No se pudo guardar el PIN');
       setStep(cashier.hasPin ? 'current' : 'new');
       setCurrentPin('');
+      setNewPin('');
     } finally {
       setBusy(false);
     }
   }
 
+  // key={step}: cada paso monta un PinPad NUEVO → empieza vacío (no arrastra el
+  // PIN del paso anterior).
   if (step === 'current') {
     return (
-      <PinPad title={`PIN actual de ${cashier.name}`} busy={busy} error={error}
+      <PinPad key="current" title={`PIN actual de ${cashier.name}`} busy={busy} error={error}
         submitLabel="Siguiente"
         onCancel={onCancel}
         onSubmit={cp => { setCurrentPin(cp); setError(null); setStep('new'); }} />
     );
   }
+  if (step === 'new') {
+    return (
+      <PinPad key="new" title={`Nuevo PIN de ${cashier.name}`} busy={busy} error={error}
+        submitLabel="Siguiente"
+        onCancel={onCancel}
+        onSubmit={np => { setNewPin(np); setError(null); setStep('verify'); }} />
+    );
+  }
   return (
-    <PinPad title={`Nuevo PIN de ${cashier.name}`} busy={busy} error={error}
+    <PinPad key="verify" title="Confirma el nuevo PIN" busy={busy} error={error}
       submitLabel="Guardar"
       onCancel={onCancel}
-      onSubmit={np => save(np, currentPin)} />
+      onSubmit={(vp) => {
+        if (vp !== newPin) {
+          setError('Los PIN no coinciden, intenta de nuevo');
+          setNewPin('');
+          setStep('new');
+          return;
+        }
+        save(newPin, currentPin);
+      }} />
   );
 }
