@@ -399,6 +399,13 @@ export interface SupplierOutstandingInvoice {
   invoiceNumber: string | null;
   outstanding: string;
   status: 'open' | 'partial';
+  purchasedAt?: string;
+}
+
+// Selección de facturas a pagar (pago a proveedor con factura elegida).
+export interface PayableSelection {
+  payableId: string;
+  amount: number;
 }
 
 export interface SupplierOutstanding {
@@ -485,10 +492,24 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ countedAmount, notes }),
       }),
-    addMovement: (type: CashMovementType, amount: number, reason: string, supplierId?: string | null) =>
+    // `payableSelections`: al pagar un proveedor, las facturas elegidas (y su
+    // monto, total o parcial). Si se envían, el backend salda EXACTAMENTE esas.
+    addMovement: (
+      type: CashMovementType,
+      amount: number,
+      reason: string,
+      supplierId?: string | null,
+      payableSelections?: PayableSelection[] | null,
+    ) =>
       req<CashMovement & MovementOutcome>('/pos/cash/movement', {
         method: 'POST',
-        body: JSON.stringify({ type, amount, reason, supplierId: supplierId ?? null }),
+        body: JSON.stringify({
+          type,
+          amount,
+          reason,
+          supplierId: supplierId ?? null,
+          payableSelections: payableSelections ?? null,
+        }),
       }),
   },
 

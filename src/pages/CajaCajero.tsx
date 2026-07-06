@@ -119,6 +119,11 @@ export default function CajaCajero() {
   // el fetch falló (degradamos sin bloquear el flujo).
   const [supplierOutstanding, setSupplierOutstanding] = useState<SupplierOutstanding | null>(null);
   const [outstandingLoading, setOutstandingLoading] = useState(false);
+  // Facturas elegidas para pagar (como en el admin): payableId → seleccionada, y
+  // el monto (total o parcial) por factura. Se inicializan al cargar la deuda:
+  // todas marcadas con su saldo completo; el cajero destilda o edita.
+  const [payableSel, setPayableSel]   = useState<Set<string>>(new Set());
+  const [payableAmt, setPayableAmt]   = useState<Record<string, string>>({});
   // Resultado del último movimiento de "Pago a proveedor": indica si se saldaron
   // facturas o si se registró como gasto sin facturas pendientes.
   const [moveOutcome, setMoveOutcome] = useState<MovementOutcome | null>(null);
@@ -192,6 +197,8 @@ export default function CajaCajero() {
     setSelectedSupplier(null);
     setSupplierQuery('');
     setSupplierOutstanding(null);
+    setPayableSel(new Set());
+    setPayableAmt({});
     setMoveOutcome(null);
   };
 
@@ -340,32 +347,56 @@ export default function CajaCajero() {
     let active = true;
     setOutstandingLoading(true);
     api.suppliers.outstanding(selectedSupplier.id)
-      .then(data => { if (active) setSupplierOutstanding(data); })
-      .catch(() => { if (active) setSupplierOutstanding(null); })
+      .then((data) => {
+        if (!active) return;
+        setSupplierOutstanding(data);
+        // Por defecto: todas las facturas marcadas con su saldo completo.
+        setPayableSel(new Set(data.invoices.map(i => i.payableId)));
+        setPayableAmt(Object.fromEntries(data.invoices.map(i => [i.payableId, String(i.outstanding)])));
+      })
+      .catch(() => { if (active) { setSupplierOutstanding(null); setPayableSel(new Set()); setPayableAmt({}); } })
       .finally(() => { if (active) setOutstandingLoading(false); });
     return () => { active = false; };
   }, [selectedSupplier]);
 
   const handleMove = async () => {
-    const amt = parseFloat(moveAmount);
-    if (!amt || amt <= 0) { setError('Ingresa un monto válido'); return; }
-    // Block overpay on the settle path: the backend will reject it with 400 anyway,
-    // but we stop it client-side first to give a clearer inline message.
-    if (
-      motivo === 'pago_proveedor' &&
-      supplierOutstanding !== null &&
-      parseFloat(supplierOutstanding.totalOutstanding) > 0 &&
-      amt > parseFloat(supplierOutstanding.totalOutstanding)
-    ) {
-      setError(`El monto supera la deuda del proveedor (${COP(parseFloat(supplierOutstanding.totalOutstanding))}). Reducí el monto o registralo como gasto aparte.`);
-      return;
+    // Pago a proveedor con facturas seleccionadas: el monto sale de las facturas.
+    const invs = supplierOutstanding?.invoices ?? [];
+    const useSelection = motivo === 'pago_proveedor' && invs.length > 0;
+
+    let amt: number;
+    let selections: { payableId: string; amount: number }[] | null = null;
+
+    if (useSelection) {
+      const chosen = invs.filter(i => payableSel.has(i.payableId));
+      selections = chosen
+        .map(i => ({ payableId: i.payableId, amount: parseFloat(payableAmt[i.payableId] ?? '0') || 0 }))
+        .filter(s => s.amount > 0);
+      if (selections.length === 0) { setError('Elige al menos una factura con monto'); return; }
+      // Ninguna factura por encima de su saldo.
+      const over = chosen.find(i => (parseFloat(payableAmt[i.payableId] ?? '0') || 0) > (parseFloat(i.outstanding) || 0) + 0.001);
+      if (over) { setError('Una factura supera su saldo pendiente. Reduce el monto.'); return; }
+      amt = selections.reduce((s, x) => s + x.amount, 0);
+    } else {
+      amt = parseFloat(moveAmount);
+      if (!amt || amt <= 0) { setError('Ingresa un monto válido'); return; }
+      // Block overpay on the generic settle path (backend also rejects).
+      if (
+        motivo === 'pago_proveedor' &&
+        supplierOutstanding !== null &&
+        parseFloat(supplierOutstanding.totalOutstanding) > 0 &&
+        amt > parseFloat(supplierOutstanding.totalOutstanding)
+      ) {
+        setError(`El monto supera la deuda del proveedor (${COP(parseFloat(supplierOutstanding.totalOutstanding))}). Reducí el monto o registralo como gasto aparte.`);
+        return;
+      }
     }
     // El motivo ya define el tipo; solo "Otro" exige una descripción escrita.
     if (motivo === 'otro' && !moveReason.trim()) { setError('Describe el motivo'); return; }
     const { type, reason } = composeMovement(movDirection, motivo, moveReason, selectedSupplier?.name);
     setMoveBusy(true); setError('');
     try {
-      const result = await api.cash.addMovement(type, amt, reason, selectedSupplier?.id ?? null);
+      const result = await api.cash.addMovement(type, amt, reason, selectedSupplier?.id ?? null, selections);
       // Capturamos el outcome antes de limpiar el estado para mostrarlo en el
       // banner de confirmación. Solo aplica para "Pago a proveedor".
       if (motivo === 'pago_proveedor' && result.outcome) {
@@ -416,6 +447,14 @@ export default function CajaCajero() {
   const cashSales = movements
     .filter(m => m.type === 'sale')
     .reduce((acc, m) => acc + Number(m.amount), 0);
+
+  // Pago a proveedor con facturas: usamos selección de facturas cuando el
+  // proveedor tiene facturas pendientes. El monto sale de las facturas elegidas.
+  const invoices = supplierOutstanding?.invoices ?? [];
+  const usingInvoiceSelection = motivo === 'pago_proveedor' && invoices.length > 0;
+  const selectedPayableTotal = invoices
+    .filter(i => payableSel.has(i.payableId))
+    .reduce((s, i) => s + (parseFloat(payableAmt[i.payableId] ?? '0') || 0), 0);
 
   // Conteo a ciegas: NO calculamos ni mostramos diferencias mientras el cajero
   // tipea. La diferencia se revela solo después de confirmar (openResult /
@@ -775,9 +814,46 @@ export default function CajaCajero() {
                       <div className="text-ink-3 text-xs mt-1.5">Verificando facturas pendientes…</div>
                     )}
                     {!outstandingLoading && supplierOutstanding !== null && (
-                      parseFloat(supplierOutstanding.totalOutstanding) > 0 ? (
-                        <div className="mt-1.5 bg-warn-soft/30 border border-warn/40 rounded-xl px-3 py-2 text-xs text-warn font-medium">
-                          Debe {COP(parseFloat(supplierOutstanding.totalOutstanding))} en {supplierOutstanding.invoiceCount} factura{supplierOutstanding.invoiceCount !== 1 ? 's' : ''}
+                      invoices.length > 0 ? (
+                        <div className="mt-1.5 space-y-1.5">
+                          <div className="text-ink-3 text-[11px] font-semibold uppercase tracking-wider">
+                            ¿Qué facturas pagas?
+                          </div>
+                          <div className="max-h-52 overflow-y-auto rounded-xl border border-line divide-y divide-line">
+                            {invoices.map((inv) => {
+                              const on = payableSel.has(inv.payableId);
+                              const cap = parseFloat(inv.outstanding) || 0;
+                              return (
+                                <div key={inv.payableId} className="flex items-center gap-2 px-3 py-2 bg-surface">
+                                  <button type="button"
+                                    onClick={() => setPayableSel(prev => {
+                                      const n = new Set(prev);
+                                      if (n.has(inv.payableId)) n.delete(inv.payableId); else n.add(inv.payableId);
+                                      return n;
+                                    })}
+                                    className={`shrink-0 w-5 h-5 rounded-md border flex items-center justify-center ${on ? 'bg-primary border-primary text-white' : 'border-line-strong'}`}>
+                                    {on && <span className="material-symbols-outlined text-[14px]">check</span>}
+                                  </button>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="text-ink text-sm font-medium truncate">
+                                      {inv.invoiceNumber ? `Factura ${inv.invoiceNumber}` : 'Factura'}
+                                      {inv.status === 'partial' && <span className="text-warn text-[11px] ml-1">· abonada</span>}
+                                    </div>
+                                    <div className="text-ink-3 text-[11px]">Debe {COP(cap)}</div>
+                                  </div>
+                                  <input type="number" inputMode="numeric"
+                                    value={payableAmt[inv.payableId] ?? ''}
+                                    disabled={!on}
+                                    onChange={e => setPayableAmt(prev => ({ ...prev, [inv.payableId]: e.target.value }))}
+                                    className={`w-24 shrink-0 bg-bg border rounded-lg px-2 py-1.5 text-ink text-sm text-right tabular-nums outline-none focus:border-primary ${(parseFloat(payableAmt[inv.payableId] ?? '0') || 0) > cap ? 'border-danger' : 'border-line'} ${!on ? 'opacity-40' : ''}`} />
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="flex items-center justify-between px-1 text-sm">
+                            <span className="text-ink-3">Total a pagar</span>
+                            <span className="font-bold text-ink tabular-nums">{COP(selectedPayableTotal)}</span>
+                          </div>
                         </div>
                       ) : (
                         <div className="mt-1.5 bg-surface-2 border border-line rounded-xl px-3 py-2 text-xs text-ink-3">
@@ -813,8 +889,9 @@ export default function CajaCajero() {
               </div>
             )}
 
-            {/* Monto */}
-            {(() => {
+            {/* Monto — se oculta cuando se paga por selección de facturas
+                (el monto sale de las facturas elegidas). */}
+            {!usingInvoiceSelection && (() => {
               const outstandingCap =
                 motivo === 'pago_proveedor' &&
                 supplierOutstanding !== null &&
