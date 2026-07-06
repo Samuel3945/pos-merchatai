@@ -281,7 +281,7 @@ export interface MeResponse {
     locationId:   string | null;
   };
   store: { id: string; name: string; phone: string; type: string; offering: string; creditoTermDays?: number };
-  features: { creditoEnabled: boolean; sellByWeight: boolean; sellDigital: boolean; wholesale: boolean; canConfirmTransfers: boolean; allowOversell?: boolean; einvoiceEnabled?: boolean };
+  features: { creditoEnabled: boolean; sellByWeight: boolean; sellDigital: boolean; wholesale: boolean; canConfirmTransfers: boolean; allowOversell?: boolean; einvoiceEnabled?: boolean; deliveryEnabled?: boolean; employeeLoansEnabled?: boolean };
   paymentMethods: PaymentMethod[];
   cashiers:       CashierLite[];
   products:       Product[];
@@ -431,6 +431,41 @@ export interface MovementOutcome {
   settledPayables?: number;
 }
 
+// ── Empleados y préstamos (vales de empleado) ──────────────────────────────────
+
+// Empleado activo, para el selector de destinatario del vale (crear préstamo).
+export interface EmployeeLite {
+  id: string;
+  name: string;
+}
+
+// Préstamo pendiente (vale de empleado) — org-wide. `outstanding` es el saldo por
+// abonar; se usa en el checklist de "Abono de préstamo".
+export interface OutstandingLoan {
+  loanId: string;
+  employeeId: string;
+  employeeName: string;
+  totalAmount: number;
+  outstanding: number;
+  createdAt: string;
+  notes: string | null;
+}
+
+// Selección de préstamos a abonar (abono de préstamo con préstamos elegidos).
+export interface LoanSelection {
+  loanId: string;
+  amount: number;
+}
+
+// Campos extra de /pos/cash/movement para el ciclo de vales de empleado:
+// - employeeId + loanKind: crear un préstamo (con type 'advance').
+// - loanSelections: registrar un abono/repago (con type 'deposit').
+export interface MovementLoanOptions {
+  employeeId?: string;
+  loanKind?: 'employee_loan';
+  loanSelections?: LoanSelection[];
+}
+
 // ── API surface ───────────────────────────────────────────────────────────────
 
 export const api = {
@@ -504,12 +539,16 @@ export const api = {
       }),
     // `payableSelections`: al pagar un proveedor, las facturas elegidas (y su
     // monto, total o parcial). Si se envían, el backend salda EXACTAMENTE esas.
+    // `options`: campos del ciclo de vales de empleado — crear préstamo
+    // (employeeId + loanKind, con type 'advance') o abonar (loanSelections, con
+    // type 'deposit'). Solo se incluyen en el body cuando vienen definidos.
     addMovement: (
       type: CashMovementType,
       amount: number,
       reason: string,
       supplierId?: string | null,
       payableSelections?: PayableSelection[] | null,
+      options?: MovementLoanOptions,
     ) =>
       req<CashMovement & MovementOutcome>('/pos/cash/movement', {
         method: 'POST',
@@ -519,8 +558,21 @@ export const api = {
           reason,
           supplierId: supplierId ?? null,
           payableSelections: payableSelections ?? null,
+          ...(options?.employeeId ? { employeeId: options.employeeId } : {}),
+          ...(options?.loanKind ? { loanKind: options.loanKind } : {}),
+          ...(options?.loanSelections ? { loanSelections: options.loanSelections } : {}),
         }),
       }),
+  },
+
+  // Empleados activos, para el selector de destinatario de un vale de empleado.
+  employees: {
+    list: () => req<{ employees: EmployeeLite[] }>('/pos/employees'),
+  },
+
+  // Préstamos (vales de empleado) pendientes de abono — org-wide.
+  employeeLoans: {
+    outstanding: () => req<{ loans: OutstandingLoan[] }>('/pos/employee-loans'),
   },
 
   // Bolsillo del domiciliario (préstamos caja ↔ domiciliario).

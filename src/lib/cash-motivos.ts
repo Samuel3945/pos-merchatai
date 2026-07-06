@@ -20,26 +20,24 @@ export type Direction = 'in' | 'out';
 export type EntryMotivo =
   | 'ingreso_base'
   | 'aporte_capital'
-  | 'otro';
+  | 'abono_prestamo';
 
 /** Motivos shown when registering a Salida (cash out). */
 export type ExitMotivo =
   | 'gasto_menor'
   | 'pago_proveedor'
-  | 'vale_empleado'
-  | 'otro';
+  | 'vale_empleado';
 
 export const ENTRY_MOTIVOS: { value: EntryMotivo; label: string }[] = [
-  { value: 'ingreso_base',   label: 'Ingreso de base' },
-  { value: 'aporte_capital', label: 'Aporte de capital' },
-  { value: 'otro',           label: 'Otro' },
+  { value: 'ingreso_base',    label: 'Ingreso de base' },
+  { value: 'aporte_capital',  label: 'Aporte de capital' },
+  { value: 'abono_prestamo',  label: 'Abono de préstamo' },
 ];
 
 export const EXIT_MOTIVOS: { value: ExitMotivo; label: string }[] = [
   { value: 'gasto_menor',    label: 'Gasto menor' },
   { value: 'pago_proveedor', label: 'Pago a proveedor' },
   { value: 'vale_empleado',  label: 'Vale de empleado' },
-  { value: 'otro',           label: 'Otro' },
 ];
 
 /**
@@ -63,7 +61,8 @@ export const REASON_PRESETS: Partial<
 // everything else out of the till is operating expense.
 
 export function entryTypeFor(_motivo: EntryMotivo): CashMovementType {
-  // Every cashier entrada (base, aporte, otro) is real cash into the drawer.
+  // Every cashier entrada (base, aporte, abono de préstamo) is real cash into
+  // the drawer.
   return 'deposit';
 }
 
@@ -73,14 +72,14 @@ export function exitTypeFor(motivo: ExitMotivo): CashMovementType {
   if (motivo === 'vale_empleado') {
     return 'advance';
   }
-  // Gasto menor, pago a proveedor y "otro" son gasto operativo (expense).
+  // Gasto menor y pago a proveedor son gasto operativo (expense).
   return 'expense';
 }
 
 /**
- * Compose the { type, reason } the POS sends to /pos/cash/movement. "Otro" uses
- * the raw note; "Pago a proveedor" leads with the chosen supplier name; every
- * other motivo uses its label, optionally suffixed with the note.
+ * Compose the { type, reason } the POS sends to /pos/cash/movement. "Pago a
+ * proveedor" leads with the chosen supplier name; every other motivo uses its
+ * label, optionally suffixed with the note.
  */
 export function composeMovement(
   direction: Direction,
@@ -99,10 +98,10 @@ export function composeMovement(
       : exitTypeFor(motivo as ExitMotivo);
 
   let reason: string;
-  if (motivo === 'otro') {
-    reason = trimmed;
-  } else if (motivo === 'pago_proveedor') {
+  if (motivo === 'pago_proveedor') {
     reason = withNote(supplierName ? `Pago a ${supplierName}` : 'Pago a proveedor');
+  } else if (motivo === 'abono_prestamo') {
+    reason = withNote('Abono de préstamo');
   } else {
     reason = withNote(label);
   }

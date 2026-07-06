@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { api, CashSession, CashMovement, CashMovementType, SupplierLite, SupplierOutstanding, MovementOutcome, CourierWalletMe, CourierWalletBalance } from '../services/api';
+import { api, CashSession, CashMovement, CashMovementType, SupplierLite, SupplierOutstanding, MovementOutcome, CourierWalletMe, CourierWalletBalance, EmployeeLite, OutstandingLoan } from '../services/api';
 import {
   ENTRY_MOTIVOS,
   EXIT_MOTIVOS,
@@ -124,9 +124,30 @@ export default function CajaCajero() {
   // todas marcadas con su saldo completo; el cajero destilda o edita.
   const [payableSel, setPayableSel]   = useState<Set<string>>(new Set());
   const [payableAmt, setPayableAmt]   = useState<Record<string, string>>({});
-  // Resultado del último movimiento de "Pago a proveedor": indica si se saldaron
-  // facturas o si se registró como gasto sin facturas pendientes.
+  // Resultado del último movimiento de "Pago a proveedor" / "Abono de préstamo":
+  // indica si se saldaron facturas/préstamos o si se registró como gasto.
   const [moveOutcome, setMoveOutcome] = useState<MovementOutcome | null>(null);
+
+  // Flags del negocio (de /pos/me). Delivery habilita el préstamo a domiciliario;
+  // vales de empleado habilita crear/abonar préstamos. Empiezan en false hasta
+  // que /pos/me responde (no mostramos algo que el plan no permite).
+  const [deliveryEnabled, setDeliveryEnabled]           = useState(false);
+  const [employeeLoansEnabled, setEmployeeLoansEnabled] = useState(false);
+
+  // Empleado — solo para el motivo "Vale de empleado". Se elige de la lista
+  // activa de la org (/pos/employees) y queda como destinatario del préstamo.
+  const [employees, setEmployees]             = useState<EmployeeLite[]>([]);
+  const [employeeLoading, setEmployeeLoading] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<{ id: string; name: string } | null>(null);
+  const [employeeQuery, setEmployeeQuery]     = useState('');
+
+  // Préstamos pendientes (vales) para el motivo "Abono de préstamo". Se cargan al
+  // montar la caja para saber si mostrar el motivo aunque el flag esté apagado.
+  const [outstandingLoans, setOutstandingLoans] = useState<OutstandingLoan[]>([]);
+  // Préstamos elegidos para abonar (como el checklist de facturas): loanId →
+  // seleccionado, y el monto (total o parcial) por préstamo.
+  const [loanSel, setLoanSel] = useState<Set<string>>(new Set());
+  const [loanAmt, setLoanAmt] = useState<Record<string, string>>({});
 
   // Bolsillo del domiciliario (préstamos caja ↔ domiciliario). Los saldos que se
   // guardan aquí son los del ÚLTIMO estado conocido del servidor (o su caché
@@ -200,6 +221,10 @@ export default function CajaCajero() {
     setPayableSel(new Set());
     setPayableAmt({});
     setMoveOutcome(null);
+    setSelectedEmployee(null);
+    setEmployeeQuery('');
+    setLoanSel(new Set());
+    setLoanAmt({});
   };
 
   const load = useCallback(async () => {
@@ -214,7 +239,24 @@ export default function CajaCajero() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(); loadWallet(); }, [load, loadWallet]);
+  // Préstamos pendientes (org-wide). Se recarga tras crear/abonar un vale para
+  // reflejar el nuevo saldo en el checklist de "Abono de préstamo".
+  const loadLoans = useCallback(async () => {
+    try { setOutstandingLoans((await api.employeeLoans.outstanding()).loans || []); }
+    catch { /* degradamos: sin préstamos no se ofrece abonar */ }
+  }, []);
+
+  useEffect(() => { load(); loadWallet(); loadLoans(); }, [load, loadWallet, loadLoans]);
+
+  // Flags del negocio: delivery (préstamo a domiciliario) y vales de empleado.
+  useEffect(() => {
+    api.pos.me()
+      .then(me => {
+        setDeliveryEnabled(!!me.features?.deliveryEnabled);
+        setEmployeeLoansEnabled(!!me.features?.employeeLoansEnabled);
+      })
+      .catch(() => { /* sin flags: se ocultan las funciones dependientes */ });
+  }, []);
 
   // Intento inicial de drenar la cola del bolsillo (por si quedaron movimientos
   // de una sesión offline previa) y reintento en cada reconexión.
@@ -329,6 +371,26 @@ export default function CajaCajero() {
     resetMovementFields();
   };
 
+  // Carga perezosa de empleados la primera vez que el cajero elige "Vale de
+  // empleado". Si falla, no se puede elegir destinatario y el confirm queda
+  // bloqueado (no dejamos crear un vale sin empleado).
+  useEffect(() => {
+    if (motivo !== 'vale_empleado' || employees.length > 0 || employeeLoading) return;
+    setEmployeeLoading(true);
+    api.employees.list()
+      .then(d => setEmployees(d.employees || []))
+      .catch(() => setEmployees([]))
+      .finally(() => setEmployeeLoading(false));
+  }, [motivo, employees.length, employeeLoading]);
+
+  // Al elegir "Abono de préstamo": todos los préstamos marcados con su saldo
+  // completo (el cajero destilda o edita). Se re-inicializa si cambian los datos.
+  useEffect(() => {
+    if (motivo !== 'abono_prestamo') return;
+    setLoanSel(new Set(outstandingLoans.map(l => l.loanId)));
+    setLoanAmt(Object.fromEntries(outstandingLoans.map(l => [l.loanId, String(l.outstanding)])));
+  }, [motivo, outstandingLoans]);
+
   // Carga perezosa de proveedores la primera vez que el cajero elige "Pago a
   // proveedor". Si falla, degradamos a nota libre sin romper el flujo.
   useEffect(() => {
@@ -360,6 +422,53 @@ export default function CajaCajero() {
   }, [selectedSupplier]);
 
   const handleMove = async () => {
+    // Vale de empleado (Salida): crea un préstamo a nombre del empleado elegido.
+    if (motivo === 'vale_empleado') {
+      const amt = parseFloat(moveAmount);
+      if (!amt || amt <= 0) { setError('Ingresa un monto válido'); return; }
+      if (!selectedEmployee) { setError('Elige un empleado'); return; }
+      const { type, reason } = composeMovement(movDirection, motivo, moveReason);
+      setMoveBusy(true); setError('');
+      try {
+        await api.cash.addMovement(type, amt, reason, null, null, {
+          employeeId: selectedEmployee.id,
+          loanKind: 'employee_loan',
+        });
+        setShowMove(false); setMoveAmount(''); resetMovementFields();
+        showOk('Vale registrado');
+        load(); loadLoans();
+      } catch (e: any) { setError(e.message || 'Error al registrar'); }
+      finally { setMoveBusy(false); }
+      return;
+    }
+
+    // Abono de préstamo (Entrada): el monto sale de los préstamos seleccionados.
+    if (motivo === 'abono_prestamo') {
+      const chosen = outstandingLoans.filter(l => loanSel.has(l.loanId));
+      const loanSelections = chosen
+        .map(l => ({ loanId: l.loanId, amount: parseFloat(loanAmt[l.loanId] ?? '0') || 0 }))
+        .filter(s => s.amount > 0);
+      if (loanSelections.length === 0) { setError('Elige al menos un préstamo con monto'); return; }
+      // Ningún abono por encima de su saldo.
+      const over = chosen.find(l => (parseFloat(loanAmt[l.loanId] ?? '0') || 0) > l.outstanding + 0.001);
+      if (over) { setError('Un abono supera el saldo del préstamo. Reduce el monto.'); return; }
+      const amt = loanSelections.reduce((s, x) => s + x.amount, 0);
+      const { type, reason } = composeMovement(movDirection, motivo, moveReason);
+      setMoveBusy(true); setError('');
+      try {
+        const result = await api.cash.addMovement(type, amt, reason, null, null, { loanSelections });
+        if (result.outcome) {
+          setMoveOutcome({ outcome: result.outcome, appliedTotal: result.appliedTotal, settledPayables: result.settledPayables });
+        } else {
+          setShowMove(false); setMoveAmount(''); resetMovementFields();
+          showOk('Abono registrado');
+        }
+        load(); loadLoans();
+      } catch (e: any) { setError(e.message || 'Error al registrar'); }
+      finally { setMoveBusy(false); }
+      return;
+    }
+
     // Pago a proveedor con facturas seleccionadas: el monto sale de las facturas.
     const invs = supplierOutstanding?.invoices ?? [];
     const useSelection = motivo === 'pago_proveedor' && invs.length > 0;
@@ -391,8 +500,6 @@ export default function CajaCajero() {
         return;
       }
     }
-    // El motivo ya define el tipo; solo "Otro" exige una descripción escrita.
-    if (motivo === 'otro' && !moveReason.trim()) { setError('Describe el motivo'); return; }
     const { type, reason } = composeMovement(movDirection, motivo, moveReason, selectedSupplier?.name);
     setMoveBusy(true); setError('');
     try {
@@ -419,7 +526,13 @@ export default function CajaCajero() {
   }
 
   const isOpen = session?.status === 'open';
-  const motivosForDir = movDirection === 'out' ? EXIT_MOTIVOS : ENTRY_MOTIVOS;
+  // "Vale de empleado" solo si el negocio tiene vales activos. "Abono de préstamo"
+  // si están activos O hay al menos un préstamo pendiente (para poder cobrar
+  // aunque el flag se apague después). El resto de motivos siempre están.
+  const canRepayLoans = employeeLoansEnabled || outstandingLoans.length > 0;
+  const exitMotivos  = EXIT_MOTIVOS.filter(o => o.value !== 'vale_empleado' || employeeLoansEnabled);
+  const entryMotivos = ENTRY_MOTIVOS.filter(o => o.value !== 'abono_prestamo' || canRepayLoans);
+  const motivosForDir = movDirection === 'out' ? exitMotivos : entryMotivos;
   const reasonPresets = REASON_PRESETS[motivo] || [];
 
   // Saldos a mostrar = último conocido del servidor + movimientos aún en cola
@@ -439,6 +552,11 @@ export default function CajaCajero() {
         || (s.company || '').toLowerCase().includes(supplierQ))
     : suppliers;
 
+  const employeeQ = employeeQuery.trim().toLowerCase();
+  const filteredEmployees = employeeQ
+    ? employees.filter(e => e.name.toLowerCase().includes(employeeQ))
+    : employees;
+
   const totalMov = movements
     .filter(m => m.type !== 'sale')
     .reduce((acc, m) => INFLOW_TYPES.has(m.type) ? acc + Number(m.amount) : acc - Number(m.amount), 0);
@@ -455,6 +573,19 @@ export default function CajaCajero() {
   const selectedPayableTotal = invoices
     .filter(i => payableSel.has(i.payableId))
     .reduce((s, i) => s + (parseFloat(payableAmt[i.payableId] ?? '0') || 0), 0);
+
+  // Abono de préstamo: el monto sale de los préstamos elegidos (se oculta el
+  // campo de monto libre, igual que con la selección de facturas).
+  const usingLoanSelection = motivo === 'abono_prestamo';
+  const selectedLoanTotal = outstandingLoans
+    .filter(l => loanSel.has(l.loanId))
+    .reduce((s, l) => s + (parseFloat(loanAmt[l.loanId] ?? '0') || 0), 0);
+
+  // El confirm exige: vale → empleado + monto; abono → total > 0.
+  const confirmDisabled =
+    moveBusy
+    || (motivo === 'vale_empleado' && (!selectedEmployee || !(parseFloat(moveAmount) > 0)))
+    || (motivo === 'abono_prestamo' && selectedLoanTotal <= 0);
 
   // Conteo a ciegas: NO calculamos ni mostramos diferencias mientras el cajero
   // tipea. La diferencia se revela solo después de confirmar (openResult /
@@ -558,7 +689,7 @@ export default function CajaCajero() {
                 Cerrar caja
               </button>
             </div>
-            {couriers.length > 0 && (
+            {deliveryEnabled && couriers.length > 0 && (
               <button onClick={() => { setLoanAmount(''); setLoanCourierId(couriers[0]?.courierId || ''); setError(''); setShowLoan(true); }}
                 className="w-full h-12 bg-surface border border-line-strong text-ink font-bold rounded-xl flex items-center justify-center gap-1.5 text-sm transition-colors hover:border-primary hover:text-primary active:scale-[0.98]">
                 <span className="material-symbols-outlined text-[18px]">volunteer_activism</span>
@@ -731,12 +862,18 @@ export default function CajaCajero() {
                 {moveOutcome.outcome === 'settled' ? (
                   <div className="bg-success-soft/20 border border-success/40 rounded-xl px-4 py-3 space-y-1">
                     <div className="text-success font-bold text-sm">
-                      Facturas saldadas — {COP(parseFloat(moveOutcome.appliedTotal || '0'))}
+                      {motivo === 'abono_prestamo' ? 'Préstamos abonados' : 'Facturas saldadas'} — {COP(parseFloat(moveOutcome.appliedTotal || '0'))}
                     </div>
                     {(moveOutcome.settledPayables ?? 0) > 0 && (
-                      <div className="text-ink-3 text-xs">
-                        {moveOutcome.settledPayables} factura{moveOutcome.settledPayables !== 1 ? 's' : ''} cerrada{moveOutcome.settledPayables !== 1 ? 's' : ''}
-                      </div>
+                      motivo === 'abono_prestamo' ? (
+                        <div className="text-ink-3 text-xs">
+                          {moveOutcome.settledPayables} préstamo{moveOutcome.settledPayables !== 1 ? 's' : ''} cerrado{moveOutcome.settledPayables !== 1 ? 's' : ''}
+                        </div>
+                      ) : (
+                        <div className="text-ink-3 text-xs">
+                          {moveOutcome.settledPayables} factura{moveOutcome.settledPayables !== 1 ? 's' : ''} cerrada{moveOutcome.settledPayables !== 1 ? 's' : ''}
+                        </div>
+                      )
                     )}
                   </div>
                 ) : (
@@ -889,9 +1026,98 @@ export default function CajaCajero() {
               </div>
             )}
 
-            {/* Monto — se oculta cuando se paga por selección de facturas
-                (el monto sale de las facturas elegidas). */}
-            {!usingInvoiceSelection && (() => {
+            {/* Empleado — solo en "Vale de empleado". Se elige de la lista activa;
+                es obligatorio (el confirm queda bloqueado sin empleado). */}
+            {motivo === 'vale_empleado' && (
+              <div>
+                <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">Empleado</label>
+                {selectedEmployee ? (
+                  <div className="flex items-center justify-between bg-primary-soft/30 border border-primary/40 rounded-xl px-4 py-2.5">
+                    <div className="text-primary text-sm font-semibold truncate">{selectedEmployee.name}</div>
+                    <button type="button" onClick={() => { setSelectedEmployee(null); setEmployeeQuery(''); }}
+                      className="text-ink-3 text-xs font-semibold hover:text-ink shrink-0 ml-2">
+                      Cambiar
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <input type="text" value={employeeQuery} onChange={e => setEmployeeQuery(e.target.value)}
+                      placeholder="Buscar empleado…"
+                      className="w-full bg-bg border border-line rounded-xl px-4 py-2.5 text-ink text-sm focus:border-primary outline-none transition-colors" />
+                    {employeeLoading ? (
+                      <div className="text-ink-3 text-xs mt-1.5">Cargando empleados…</div>
+                    ) : employees.length === 0 ? (
+                      <div className="text-ink-3 text-xs mt-1.5">No hay empleados registrados.</div>
+                    ) : filteredEmployees.length > 0 ? (
+                      <div className="mt-1.5 max-h-40 overflow-y-auto rounded-xl border border-line divide-y divide-line">
+                        {filteredEmployees.slice(0, 8).map(emp => (
+                          <button key={emp.id} type="button" onClick={() => { setSelectedEmployee(emp); setEmployeeQuery(''); }}
+                            className="w-full text-left px-4 py-2.5 bg-surface hover:bg-surface-3 transition-colors">
+                            <div className="text-ink text-sm font-medium truncate">{emp.name}</div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-ink-3 text-xs mt-1.5">Sin coincidencias.</div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Abono de préstamo — checklist de préstamos pendientes (como las
+                facturas de proveedor): elige cuáles abonar y cuánto por cada uno. */}
+            {motivo === 'abono_prestamo' && (
+              <div>
+                <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">¿Qué préstamos abonas?</label>
+                {outstandingLoans.length === 0 ? (
+                  <div className="bg-surface-2 border border-line rounded-xl px-3 py-2 text-xs text-ink-3">
+                    No hay préstamos pendientes.
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <div className="max-h-52 overflow-y-auto rounded-xl border border-line divide-y divide-line">
+                      {outstandingLoans.map(loan => {
+                        const on = loanSel.has(loan.loanId);
+                        const cap = loan.outstanding;
+                        return (
+                          <div key={loan.loanId} className="flex items-center gap-2 px-3 py-2 bg-surface">
+                            <button type="button"
+                              onClick={() => setLoanSel(prev => {
+                                const n = new Set(prev);
+                                if (n.has(loan.loanId)) n.delete(loan.loanId); else n.add(loan.loanId);
+                                return n;
+                              })}
+                              className={`shrink-0 w-5 h-5 rounded-md border flex items-center justify-center ${on ? 'bg-primary border-primary text-white' : 'border-line-strong'}`}>
+                              {on && <span className="material-symbols-outlined text-[14px]">check</span>}
+                            </button>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-ink text-sm font-medium truncate">{loan.employeeName}</div>
+                              <div className="text-ink-3 text-[11px]">
+                                Debe {COP(cap)} · {new Date(loan.createdAt).toLocaleDateString('es-CO')}
+                              </div>
+                            </div>
+                            <input type="number" inputMode="numeric"
+                              value={loanAmt[loan.loanId] ?? ''}
+                              disabled={!on}
+                              onChange={e => setLoanAmt(prev => ({ ...prev, [loan.loanId]: e.target.value }))}
+                              className={`w-24 shrink-0 bg-bg border rounded-lg px-2 py-1.5 text-ink text-sm text-right tabular-nums outline-none focus:border-primary ${(parseFloat(loanAmt[loan.loanId] ?? '0') || 0) > cap ? 'border-danger' : 'border-line'} ${!on ? 'opacity-40' : ''}`} />
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="flex items-center justify-between px-1 text-sm">
+                      <span className="text-ink-3">Total a abonar</span>
+                      <span className="font-bold text-ink tabular-nums">{COP(selectedLoanTotal)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Monto — se oculta cuando se paga por selección de facturas o por
+                abono de préstamo (el monto sale de la selección). */}
+            {!usingInvoiceSelection && !usingLoanSelection && (() => {
               const outstandingCap =
                 motivo === 'pago_proveedor' &&
                 supplierOutstanding !== null &&
@@ -924,7 +1150,7 @@ export default function CajaCajero() {
             {/* Nota con presets rápidos */}
             <div>
               <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">
-                {motivo === 'otro' ? 'Descripción' : 'Nota (opcional)'}
+                Nota (opcional)
               </label>
               {reasonPresets.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mb-2">
@@ -941,14 +1167,14 @@ export default function CajaCajero() {
                 </div>
               )}
               <input type="text" value={moveReason} onChange={e => setMoveReason(e.target.value)}
-                placeholder={motivo === 'otro' ? 'Describe el motivo…' : 'Detalle adicional…'}
+                placeholder="Detalle adicional…"
                 className="w-full bg-bg border border-line rounded-xl px-4 py-2.5 text-ink text-sm focus:border-primary outline-none transition-colors" />
             </div>
 
             {error && <div className="text-danger text-sm">{error}</div>}
 
             <div className="grid grid-cols-2 gap-2">
-              <button onClick={handleMove} disabled={moveBusy}
+              <button onClick={handleMove} disabled={confirmDisabled}
                 className="h-11 bg-primary-soft hover:bg-primary-soft disabled:opacity-40 text-primary font-bold rounded-xl transition-colors">
                 {moveBusy ? 'Guardando…' : 'Registrar'}
               </button>
