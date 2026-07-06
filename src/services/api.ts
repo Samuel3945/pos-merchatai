@@ -566,8 +566,12 @@ export const api = {
   },
 
   // Empleados activos, para el selector de destinatario de un vale de empleado.
+  // Reutiliza /pos/cashiers (mismos pos_users activos); mapeamos a {id,name}.
   employees: {
-    list: () => req<{ employees: EmployeeLite[] }>('/pos/employees'),
+    list: (): Promise<{ employees: EmployeeLite[] }> =>
+      req<{ cashiers: CashierLite[] }>('/pos/cashiers').then(d => ({
+        employees: (d.cashiers ?? []).map(c => ({ id: c.id, name: c.name })),
+      })),
   },
 
   // Préstamos (vales de empleado) pendientes de abono — org-wide.
