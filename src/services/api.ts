@@ -463,6 +463,9 @@ export interface LoanSelection {
 export interface MovementLoanOptions {
   employeeId?: string;
   loanKind?: 'employee_loan';
+  // Vencimiento del crédito del vale ('YYYY-MM-DD'). El backend lo usa como
+  // fecha de pago del préstamo; omitido ⇒ plazo por defecto del negocio.
+  loanDueDate?: string;
   loanSelections?: LoanSelection[];
 }
 
@@ -560,6 +563,7 @@ export const api = {
           payableSelections: payableSelections ?? null,
           ...(options?.employeeId ? { employeeId: options.employeeId } : {}),
           ...(options?.loanKind ? { loanKind: options.loanKind } : {}),
+          ...(options?.loanDueDate ? { loanDueDate: options.loanDueDate } : {}),
           ...(options?.loanSelections ? { loanSelections: options.loanSelections } : {}),
         }),
       }),

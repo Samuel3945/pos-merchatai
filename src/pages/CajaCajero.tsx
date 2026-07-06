@@ -14,8 +14,31 @@ import {
   syncCourierQueue,
   type QueuedCourierMove,
 } from '../lib/offline';
+import { DueDateCalendar } from '../components/DueDateCalendar';
 
 const COP = (n: number) => '$' + Math.round(Number(n) || 0).toLocaleString('es-CO');
+
+// Fecha local YYYY-MM-DD a `days` días de hoy. Mismo cálculo que el flujo de
+// fiado del cliente (CheckoutModal), para que el vencimiento de un vale de
+// empleado se calcule igual que el de un crédito de cliente.
+const isoDaysFromNow = (days: number): string => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + days);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+// Etiqueta legible de un vencimiento YYYY-MM-DD, ej. "viernes, 1 de agosto".
+const dueDateLabel = (iso: string): string => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Intl.DateTimeFormat('es-CO', {
+    weekday: 'long', day: 'numeric', month: 'long',
+  }).format(new Date(y, m - 1, d));
+};
 
 // Clave de caché del último estado conocido del bolsillo (para operar offline).
 const WALLET_CACHE_KEY = 'pos_courier_wallet_cache';
@@ -139,6 +162,11 @@ export default function CajaCajero() {
   const [employeeLoading, setEmployeeLoading] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<{ id: string; name: string } | null>(null);
   const [employeeQuery, setEmployeeQuery]     = useState('');
+  // Plazo por defecto del negocio (mismo que usa el fiado del cliente). El vale
+  // de empleado es ahora un crédito con vencimiento: el cajero elige "¿cuándo
+  // paga?" con los mismos botones rápidos que el crédito de cliente.
+  const [loanTermDays, setLoanTermDays]       = useState(30);
+  const [loanDueDate, setLoanDueDate]         = useState(() => isoDaysFromNow(30));
 
   // Préstamos pendientes (vales) para el motivo "Abono de préstamo". Se cargan al
   // montar la caja para saber si mostrar el motivo aunque el flag esté apagado.
@@ -214,6 +242,7 @@ export default function CajaCajero() {
     setMoveOutcome(null);
     setSelectedEmployee(null);
     setEmployeeQuery('');
+    setLoanDueDate(isoDaysFromNow(loanTermDays));
     setLoanSel(new Set());
     setLoanAmt({});
   };
@@ -244,6 +273,9 @@ export default function CajaCajero() {
     api.pos.me()
       .then(me => {
         setEmployeeLoansEnabled(!!me.features?.employeeLoansEnabled);
+        const term = typeof me.store?.creditoTermDays === 'number' ? me.store.creditoTermDays : 30;
+        setLoanTermDays(term);
+        setLoanDueDate(isoDaysFromNow(term));
       })
       .catch(() => { /* sin flags: se ocultan las funciones dependientes */ });
   }, []);
@@ -411,6 +443,7 @@ export default function CajaCajero() {
         await api.cash.addMovement(type, amt, reason, null, null, {
           employeeId: selectedEmployee.id,
           loanKind: 'employee_loan',
+          loanDueDate,
         });
         setShowMove(false); setMoveAmount(''); resetMovementFields();
         showOk('Vale registrado');
@@ -1032,6 +1065,17 @@ export default function CajaCajero() {
                     )}
                   </>
                 )}
+
+                {/* ¿Cuándo paga? — el vale es un crédito con vencimiento. Mismos
+                    botones rápidos y cálculo de fecha que el fiado del cliente
+                    (DueDateCalendar), para que ambos flujos se sientan iguales. */}
+                <div className="mt-3">
+                  <label className="block text-xs text-ink-3 font-semibold uppercase tracking-wider mb-1.5">¿Cuándo paga?</label>
+                  <DueDateCalendar value={loanDueDate} onChange={setLoanDueDate} />
+                  <p className="text-ink-3 text-[11px] leading-snug mt-1.5">
+                    Vence el <strong className="text-ink-2">{dueDateLabel(loanDueDate)}</strong>.
+                  </p>
+                </div>
               </div>
             )}
 

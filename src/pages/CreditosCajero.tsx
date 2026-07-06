@@ -31,6 +31,16 @@ function isAvailableNow(pm: PaymentMethod): boolean {
   return true;
 }
 
+// Un abono/saldo por transferencia (método digital, no efectivo) NO salda el
+// crédito de inmediato: el backend crea una conciliación de transferencia y el
+// crédito queda "Pendiente a confirmar" hasta que se verifique. Solo el efectivo
+// (cash) salda al instante.
+function isTransferMethod(name: string, options: PaymentMethod[]): boolean {
+  const pm = options.find(p => p.name === name);
+  if (!pm) return name.toLowerCase() !== 'efectivo';
+  return pm.type !== 'cash' && pm.name.toLowerCase() !== 'efectivo';
+}
+
 export default function CreditosCajero() {
   const [clients, setClients]         = useState<CreditoClient[]>([]);
   const [stats, setStats]             = useState<Record<string, number>>({});
@@ -38,6 +48,9 @@ export default function CreditosCajero() {
   const [search, setSearch]           = useState('');
   const [error, setError]             = useState('');
   const [success, setSuccess]         = useState('');
+  // Aviso "Pendiente a confirmar" tras un abono/saldo por transferencia. Se
+  // muestra en amarillo (warn), no en verde, para no dar por saldada la deuda.
+  const [pendingMsg, setPendingMsg]   = useState('');
   const [paymentOptions, setPaymentOptions] = useState<PaymentMethod[]>([DEFAULT_METHOD]);
   const [activeTab, setActiveTab]     = useState<'pendientes' | 'historial'>('pendientes');
   const [history, setHistory]         = useState<CreditoHistoryItem[]>([]);
@@ -85,7 +98,8 @@ export default function CreditosCajero() {
 
   useEffect(() => { if (activeTab === 'historial') loadHistory(); }, [activeTab, loadHistory]);
 
-  const showOk = (msg: string) => { setSuccess(msg); setTimeout(() => setSuccess(''), 3500); };
+  const showOk = (msg: string) => { setPendingMsg(''); setSuccess(msg); setTimeout(() => setSuccess(''), 3500); };
+  const showPending = (msg: string) => { setSuccess(''); setPendingMsg(msg); setTimeout(() => setPendingMsg(''), 6000); };
 
   const openAbonar = (c: CreditoClient) => {
     setSelected(c); setMode('abonar');
@@ -109,20 +123,30 @@ export default function CreditosCajero() {
         setAbonoError(`El monto supera la deuda (${COP(selected.total_owed)}). Usa "Saldar".`);
         return;
       }
+      const byTransfer = isTransferMethod(method, paymentOptions);
       setBusy(true); setAbonoError('');
       try {
         await api.creditos.abonar(selected.id, amt, method);
         setSelected(null); setAbonoAmount('');
-        showOk(`Abono de ${COP(amt)} registrado`);
+        if (byTransfer) {
+          showPending(`Abono de ${COP(amt)} por transferencia — pendiente a confirmar`);
+        } else {
+          showOk(`Abono de ${COP(amt)} registrado`);
+        }
         load();
       } catch (e: any) { setAbonoError(e.message || 'Error al registrar abono'); }
       finally { setBusy(false); }
     } else {
+      const byTransfer = isTransferMethod(method, paymentOptions);
       setBusy(true); setError('');
       try {
         await api.creditos.settle(selected.id, method);
         setSelected(null);
-        showOk('Crédito saldado completamente');
+        if (byTransfer) {
+          showPending('Pago por transferencia — pendiente a confirmar');
+        } else {
+          showOk('Crédito saldado completamente');
+        }
         load();
       } catch (e: any) { setError(e.message || 'Error al saldar'); }
       finally { setBusy(false); }
@@ -152,6 +176,12 @@ export default function CreditosCajero() {
       <div className="max-w-lg mx-auto px-4 py-5 pb-6 space-y-4">
 
         {success && <div className="px-4 py-2.5 bg-success-soft border border-success/40 text-success rounded-xl text-sm font-semibold">{success}</div>}
+        {pendingMsg && (
+          <div className="flex items-start gap-2 px-4 py-2.5 bg-warn-soft border border-warn/40 text-warn rounded-xl text-sm font-semibold">
+            <span className="material-symbols-outlined text-[18px] mt-px shrink-0">schedule</span>
+            <span>{pendingMsg}</span>
+          </div>
+        )}
         {error   && <div className="px-4 py-2.5 bg-danger-soft/30 border border-danger text-danger rounded-xl text-sm">{error}</div>}
 
         {/* Tabs */}
@@ -341,6 +371,17 @@ export default function CreditosCajero() {
               </div>
             </div>
 
+            {/* Aviso: un abono por transferencia queda pendiente de confirmación
+                (el backend concilia la transferencia; no salda de inmediato). */}
+            {isTransferMethod(method, paymentOptions) && (
+              <div className="flex items-start gap-2 bg-warn-soft border border-warn/40 rounded-xl px-3 py-2.5">
+                <span className="material-symbols-outlined text-warn text-[18px] mt-px shrink-0">schedule</span>
+                <p className="text-warn text-xs leading-snug">
+                  Abono por transferencia — <span className="font-bold">pendiente a confirmar</span>. La deuda no se descuenta hasta que se verifique el pago.
+                </p>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-2 pt-1">
               <button onClick={handlePay} disabled={busy || !validAbono}
                 className="h-12 bg-primary-soft/70 hover:bg-primary-soft disabled:opacity-40 disabled:cursor-not-allowed text-primary font-bold rounded-xl border border-primary/30 transition-colors flex items-center justify-center gap-2">
@@ -392,6 +433,17 @@ export default function CreditosCajero() {
                 </button>
               ))}
             </div>
+
+            {/* Aviso: un pago por transferencia queda pendiente de confirmación
+                (el backend concilia la transferencia; no salda de inmediato). */}
+            {isTransferMethod(method, paymentOptions) && (
+              <div className="flex items-start gap-2 bg-warn-soft border border-warn/40 rounded-xl px-3 py-2.5">
+                <span className="material-symbols-outlined text-warn text-[18px] mt-px shrink-0">schedule</span>
+                <p className="text-warn text-xs leading-snug">
+                  Pago por transferencia — <span className="font-bold">pendiente a confirmar</span>. El crédito no se salda hasta que se verifique el pago.
+                </p>
+              </div>
+            )}
 
             {error && <div className="text-danger text-sm">{error}</div>}
 
