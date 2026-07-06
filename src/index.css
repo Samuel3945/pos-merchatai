@@ -92,3 +92,16 @@
 /* Thin scrollbar used by the filter rows. */
 .scrollbar-thin::-webkit-scrollbar { height: 6px; width: 6px; }
 .scrollbar-thin::-webkit-scrollbar-thumb { background: rgb(var(--tc-line-strong)); border-radius: 999px; }
+
+/* Sin flechitas (spinner) en los inputs numéricos — se ven feas y confunden.
+   Se conserva type="number" (teclado numérico) pero sin los controles. */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
