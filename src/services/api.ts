@@ -341,6 +341,12 @@ export interface Customer {
 // dashboard renders. Dates arrive as ISO strings (JSON), numeric money columns
 // (totalSpent/total) as strings; counters/amounts already parsed to numbers.
 
+export interface CustomerDetailSaleItem {
+  productName: string;
+  qty: number;
+  unitType: string;
+}
+
 export interface CustomerDetailSale {
   id: string;
   saleNumber: number | null;
@@ -349,6 +355,8 @@ export interface CustomerDetailSale {
   paymentType: string;
   status: string;
   fullyReturned: boolean;
+  // Qué pidió el cliente en esta venta.
+  items: CustomerDetailSaleItem[];
 }
 
 export interface CustomerDetailAbono {

@@ -9,6 +9,19 @@ const fmtDate = (iso: string | null) => {
   return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
+// Fecha + hora (para saber a qué hora pidió/compró el cliente).
+const fmtDateTime = (iso: string | null) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return isNaN(d.getTime())
+    ? '—'
+    : d.toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+
+// "Arroz ×2, Leche ×1 …" — qué pidió el cliente en una venta.
+const fmtQty = (qty: number, unitType: string) =>
+  unitType === 'weight' ? `${qty} kg` : `×${qty}`;
+
 const DELIVERY_STATUS_LABELS: Record<string, string> = {
   pending: 'Pedido tomado',
   assigned: 'Tomado por el repartidor',
@@ -260,7 +273,7 @@ export default function ClientesCajero() {
                             <div className="text-ink font-semibold text-sm">
                               {s.saleNumber != null ? `Venta #${s.saleNumber}` : 'Venta'}
                             </div>
-                            <div className="text-ink-3 text-[11px] mt-0.5">{fmtDate(s.date)}</div>
+                            <div className="text-ink-3 text-[11px] mt-0.5">{fmtDateTime(s.date)}</div>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
                             {s.fullyReturned && (
@@ -271,7 +284,18 @@ export default function ClientesCajero() {
                             <span className="text-ink font-bold text-sm tabular-nums">{COP(s.total)}</span>
                           </div>
                         </div>
-                        <div className="mt-1">
+                        {/* Qué pidió: lista de productos de la venta */}
+                        {(s.items ?? []).length > 0 && (
+                          <div className="mt-1.5 text-ink-2 text-xs leading-relaxed">
+                            {s.items.map((it, i) => (
+                              <span key={i}>
+                                {i > 0 && <span className="text-ink-3"> · </span>}
+                                {it.productName} <span className="text-ink-3">{fmtQty(it.qty, it.unitType)}</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <div className="mt-1.5">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-primary-soft text-primary">
                             {s.paymentType === 'cash' ? 'Efectivo' : s.paymentType}
                           </span>
