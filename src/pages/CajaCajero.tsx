@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { api, CashSession, CashMovement, CashMovementType, SupplierLite, SupplierOutstanding, MovementOutcome, CourierWalletMe, CourierWalletBalance, EmployeeLite, OutstandingLoan } from '../services/api';
+import { api, getActiveCashier, CashSession, CashMovement, CashMovementType, SupplierLite, SupplierOutstanding, MovementOutcome, CourierWalletMe, EmployeeLite, OutstandingLoan } from '../services/api';
 import {
   ENTRY_MOTIVOS,
   EXIT_MOTIVOS,
@@ -128,10 +128,9 @@ export default function CajaCajero() {
   // indica si se saldaron facturas/préstamos o si se registró como gasto.
   const [moveOutcome, setMoveOutcome] = useState<MovementOutcome | null>(null);
 
-  // Flags del negocio (de /pos/me). Delivery habilita el préstamo a domiciliario;
-  // vales de empleado habilita crear/abonar préstamos. Empiezan en false hasta
-  // que /pos/me responde (no mostramos algo que el plan no permite).
-  const [deliveryEnabled, setDeliveryEnabled]           = useState(false);
+  // Flags del negocio (de /pos/me). Vales de empleado habilita crear/abonar
+  // préstamos. Empieza en false hasta que /pos/me responde (no mostramos algo
+  // que el plan no permite).
   const [employeeLoansEnabled, setEmployeeLoansEnabled] = useState(false);
 
   // Empleado — solo para el motivo "Vale de empleado". Se elige de la lista
@@ -149,20 +148,14 @@ export default function CajaCajero() {
   const [loanSel, setLoanSel] = useState<Set<string>>(new Set());
   const [loanAmt, setLoanAmt] = useState<Record<string, string>>({});
 
-  // Bolsillo del domiciliario (préstamos caja ↔ domiciliario). Los saldos que se
+  // Bolsillo del domiciliario (entregas domiciliario → caja). Los saldos que se
   // guardan aquí son los del ÚLTIMO estado conocido del servidor (o su caché
   // offline); los movimientos en cola se aplican encima al mostrar.
   const [walletMe, setWalletMe]         = useState<CourierWalletMe | null>(null);
-  const [couriers, setCouriers]         = useState<CourierWalletBalance[]>([]);
   const [queuedMoves, setQueuedMoves]   = useState<QueuedCourierMove[]>([]);
   // Conexión: solo cambia a offline cuando el evento dispara explícitamente
   // (navigator.onLine es poco confiable al montar).
   const [online, setOnline]             = useState(true);
-  // Modal "Préstamo a domiciliario" (base_from_caja).
-  const [showLoan, setShowLoan]         = useState(false);
-  const [loanCourierId, setLoanCourierId] = useState('');
-  const [loanAmount, setLoanAmount]     = useState('');
-  const [loanBusy, setLoanBusy]         = useState(false);
   // Modal "Entregar a caja" del propio domiciliario (handover_to_caja).
   const [showHandover, setShowHandover] = useState(false);
   const [handoverAmount, setHandoverAmount] = useState('');
@@ -176,7 +169,6 @@ export default function CajaCajero() {
     try {
       const w = await api.courierWallet.overview();
       setWalletMe(w.me);
-      setCouriers(w.couriers || []);
       // Cachea el último estado conocido para poder operar sin conexión.
       try { localStorage.setItem(WALLET_CACHE_KEY, JSON.stringify(w)); } catch { /* noop */ }
     } catch {
@@ -184,9 +176,8 @@ export default function CajaCajero() {
       try {
         const raw = localStorage.getItem(WALLET_CACHE_KEY);
         if (raw) {
-          const w = JSON.parse(raw) as { me: CourierWalletMe | null; couriers: CourierWalletBalance[] };
+          const w = JSON.parse(raw) as { me: CourierWalletMe | null };
           setWalletMe(w.me);
-          setCouriers(w.couriers || []);
         }
       } catch { /* noop */ }
     }
@@ -248,11 +239,10 @@ export default function CajaCajero() {
 
   useEffect(() => { load(); loadWallet(); loadLoans(); }, [load, loadWallet, loadLoans]);
 
-  // Flags del negocio: delivery (préstamo a domiciliario) y vales de empleado.
+  // Flags del negocio: vales de empleado.
   useEffect(() => {
     api.pos.me()
       .then(me => {
-        setDeliveryEnabled(!!me.features?.deliveryEnabled);
         setEmployeeLoansEnabled(!!me.features?.employeeLoansEnabled);
       })
       .catch(() => { /* sin flags: se ocultan las funciones dependientes */ });
@@ -278,31 +268,6 @@ export default function CajaCajero() {
   const genUuid = () =>
     (globalThis.crypto?.randomUUID?.() ??
       `${Date.now()}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`);
-
-  // Caja → domiciliario: la caja le presta base para dar vuelto. Funciona offline:
-  // si la red falla, se encola y se sincroniza al reconectar (idempotente).
-  const handleLoan = async () => {
-    const amt = parseFloat(loanAmount);
-    if (!amt || amt <= 0) { setError('Ingresa un monto válido'); return; }
-    if (!loanCourierId) { setError('Elige a quién le prestas'); return; }
-    setLoanBusy(true); setError('');
-    const clientMovementId = genUuid();
-    const courierName = couriers.find(c => c.courierId === loanCourierId)?.name;
-    try {
-      await api.courierWallet.move({ direction: 'base_from_caja', amount: amt, courierId: loanCourierId, clientMovementId });
-      setShowLoan(false); setLoanAmount(''); setLoanCourierId('');
-      showOk('Préstamo registrado');
-      load(); loadWallet();
-    } catch (e: any) {
-      if (isNetworkError(e)) {
-        await queueCourierMove({ direction: 'base_from_caja', amount: amt, courierId: loanCourierId, courierName, clientMovementId });
-        setShowLoan(false); setLoanAmount(''); setLoanCourierId('');
-        showOk('Guardado sin conexión — se sincroniza al reconectar');
-        setOnline(false); refreshQueued();
-      } else { setError(e.message || 'No se pudo registrar el préstamo'); }
-    }
-    finally { setLoanBusy(false); }
-  };
 
   // Domiciliario → caja: entrega efectivo (billetes grandes) a la caja. Offline igual.
   const handleHandover = async () => {
@@ -382,6 +347,19 @@ export default function CajaCajero() {
       .catch(() => setEmployees([]))
       .finally(() => setEmployeeLoading(false));
   }, [motivo, employees.length, employeeLoading]);
+
+  // Al abrir "Vale de empleado" (o al cargarse la lista), pre-selecciona al
+  // cajero que opera la caja como destinatario por defecto. Sigue siendo
+  // editable (el cajero puede tocar "Cambiar" y elegir otro). Si el operador
+  // activo no coincide con ningún empleado, se deja en null (sin romper). No
+  // depende de selectedEmployee, así que "Cambiar" no lo vuelve a rellenar.
+  useEffect(() => {
+    if (motivo !== 'vale_empleado' || employees.length === 0) return;
+    const me = getActiveCashier();
+    if (!me) return;
+    const match = employees.find(e => e.id === me.id);
+    if (match) setSelectedEmployee(match);
+  }, [motivo, employees]);
 
   // Al elegir "Abono de préstamo": todos los préstamos marcados con su saldo
   // completo (el cajero destilda o edita). Se re-inicializa si cambian los datos.
@@ -535,13 +513,12 @@ export default function CajaCajero() {
   const motivosForDir = movDirection === 'out' ? exitMotivos : entryMotivos;
   const reasonPresets = REASON_PRESETS[motivo] || [];
 
-  // Saldos a mostrar = último conocido del servidor + movimientos aún en cola
-  // (offline). base_from_caja suma; handover_to_caja resta al mismo domiciliario.
+  // Saldo a mostrar = último conocido del servidor + movimientos aún en cola
+  // (offline). handover_to_caja resta al domiciliario.
   const queuedDeltaFor = (courierId: string) =>
     queuedMoves
       .filter(m => m.courierId === courierId)
       .reduce((acc, m) => acc + (m.direction === 'base_from_caja' ? m.amount : -m.amount), 0);
-  const displayCouriers = couriers.map(c => ({ ...c, balance: c.balance + queuedDeltaFor(c.courierId) }));
   const displayMeBalance = walletMe ? walletMe.balance + queuedDeltaFor(walletMe.courierId) : 0;
   const pendingCount = queuedMoves.length;
 
@@ -689,13 +666,6 @@ export default function CajaCajero() {
                 Cerrar caja
               </button>
             </div>
-            {deliveryEnabled && couriers.length > 0 && (
-              <button onClick={() => { setLoanAmount(''); setLoanCourierId(couriers[0]?.courierId || ''); setError(''); setShowLoan(true); }}
-                className="w-full h-12 bg-surface border border-line-strong text-ink font-bold rounded-xl flex items-center justify-center gap-1.5 text-sm transition-colors hover:border-primary hover:text-primary active:scale-[0.98]">
-                <span className="material-symbols-outlined text-[18px]">volunteer_activism</span>
-                Prestar a domiciliario
-              </button>
-            )}
           </div>
         )}
 
@@ -1185,61 +1155,6 @@ export default function CajaCajero() {
             </div>
             </>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* Modal: prestar base a un domiciliario (caja → domiciliario) */}
-      {showLoan && (
-        <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-          <div className="bg-surface border border-line rounded-t-2xl sm:rounded-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between">
-              <h2 className="font-bold text-ink text-lg">Prestar a domiciliario</h2>
-              <button onClick={() => { setShowLoan(false); setError(''); }} className="text-ink-3 hover:text-ink">
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-            <p className="text-ink-3 text-xs -mt-2">Le entregas base para que dé vuelto. Sale del cajón y queda a su nombre.</p>
-
-            <div>
-              <div className="text-ink-3 text-[11px] uppercase tracking-wider font-bold mb-2">¿A quién?</div>
-              <div className="space-y-2">
-                {displayCouriers.map(c => (
-                  <button key={c.courierId} onClick={() => setLoanCourierId(c.courierId)}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm transition-colors ${
-                      loanCourierId === c.courierId
-                        ? 'bg-primary-soft/30 border-primary text-primary font-bold'
-                        : 'bg-surface-2 border-line text-ink'
-                    }`}>
-                    <span className="flex items-center gap-1.5">
-                      <span className="material-symbols-outlined text-[18px]">two_wheeler</span>
-                      {c.name}
-                    </span>
-                    <span className="text-ink-3 text-xs tabular-nums">lleva {COP(c.balance)}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <div className="text-ink-3 text-[11px] uppercase tracking-wider font-bold mb-1">Monto</div>
-              <input type="number" inputMode="numeric" value={loanAmount} onChange={e => setLoanAmount(e.target.value)}
-                placeholder="0" autoFocus
-                className="w-full h-12 bg-bg border border-line rounded-xl px-4 text-ink text-lg font-bold tabular-nums outline-none focus:border-primary" />
-            </div>
-
-            {error && <div className="text-danger text-sm">{error}</div>}
-
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={handleLoan} disabled={loanBusy}
-                className="h-11 bg-primary-soft hover:bg-primary-soft disabled:opacity-40 text-primary font-bold rounded-xl transition-colors">
-                {loanBusy ? 'Guardando…' : 'Prestar'}
-              </button>
-              <button onClick={() => { setShowLoan(false); setError(''); }}
-                className="h-11 bg-surface-2 border border-line text-ink-2 font-semibold rounded-xl hover:bg-surface-3 transition-colors">
-                Cancelar
-              </button>
-            </div>
           </div>
         </div>
       )}
