@@ -375,6 +375,12 @@ export default function VentasCajero({ session }: Props) {
                         </td>
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-1.5 flex-wrap">
+                            {sale.channel === 'delivery' && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-500/15 text-amber-700">
+                                <span className="material-symbols-outlined text-[12px]">two_wheeler</span>
+                                Domicilio
+                              </span>
+                            )}
                             <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${paymentBadgeClass(sale.paymentType)}`}>
                               {isCredito && <span className="material-symbols-outlined text-[11px]">handshake</span>}
                               {sale.paymentType === 'cash' ? 'Efectivo' : sale.paymentType}
@@ -514,6 +520,12 @@ export default function VentasCajero({ session }: Props) {
                 <p className="text-ink-3 text-xs mt-0.5">
                   Venta #{returnSale.id.slice(0,6).toUpperCase()} · ${Number(returnSale.total).toLocaleString('es-CO')}
                 </p>
+                {returnSale.channel === 'delivery' && (
+                  <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-700">
+                    <span className="material-symbols-outlined text-[12px]">two_wheeler</span>
+                    Venta por domicilio
+                  </span>
+                )}
               </div>
               <button onClick={() => setReturnSale(null)} className="text-ink-3 hover:text-ink">
                 <span className="material-symbols-outlined">close</span>

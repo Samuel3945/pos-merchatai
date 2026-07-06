@@ -171,6 +171,8 @@ export interface Sale {
   notes: string | null;
   items: SaleItem[];
   payments?: SalePayment[];
+  // Canal: 'delivery' = venta por domicilio (se marca en la lista de ventas).
+  channel?: 'pos' | 'panel' | 'delivery' | 'agent' | null;
   createdAt: string;
   einvoiceStatus?: EInvoiceStatus | null;
   einvoiceCufe?: string | null;
