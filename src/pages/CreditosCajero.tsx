@@ -277,6 +277,12 @@ export default function CreditosCajero() {
                     {c.days_overdue > 0 && (
                       <div className="text-xs mt-1 text-warn">{c.days_overdue} día{c.days_overdue !== 1 ? 's' : ''} vencido</div>
                     )}
+                    {(c.pending_confirmation ?? 0) > 0 && (
+                      <div className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 bg-warn-soft border border-warn/40 text-warn rounded-lg text-[11px] font-semibold">
+                        <span className="material-symbols-outlined text-[13px]">schedule</span>
+                        Pendiente a confirmar: {COP(c.pending_confirmation ?? 0)}
+                      </div>
+                    )}
                   </div>
                   <div className="text-right shrink-0">
                     <div className="font-black text-lg tabular-nums text-ink">{COP(c.total_owed)}</div>

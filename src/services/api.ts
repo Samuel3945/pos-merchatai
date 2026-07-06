@@ -302,6 +302,9 @@ export interface CreditoClient {
   days_overdue: number;
   risk_level: 'high' | 'mid' | 'low';
   notes: string | null;
+  // Monto abonado por transferencia que aún no se confirma (conciliación
+  // pendiente). Espejo del backend, snake_case. Ausente/0 = nada pendiente.
+  pending_confirmation?: number;
 }
 
 export interface CreditoPayment {

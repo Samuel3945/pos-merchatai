@@ -90,8 +90,8 @@ export function DueDateCalendar({
               onClick={() => select(iso)}
               className={`flex-1 px-2 py-2 rounded-lg text-xs font-bold border transition-colors ${
                 active
-                  ? 'bg-warn text-white border-warn'
-                  : 'bg-surface text-warn border-warn/50 hover:bg-warn-soft'
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-surface text-primary border-primary/50 hover:bg-primary-soft'
               }`}
             >
               {p.label}
@@ -101,7 +101,7 @@ export function DueDateCalendar({
       </div>
 
       {/* Themed month grid */}
-      <div className="bg-surface border border-warn/40 rounded-xl p-2.5">
+      <div className="bg-surface border border-primary/40 rounded-xl p-2.5">
         <div className="flex items-center justify-between mb-2 px-0.5">
           <span className="text-ink font-bold text-sm capitalize">
             {MONTHS[view.m]} {view.y}
@@ -111,7 +111,7 @@ export function DueDateCalendar({
               type="button"
               onClick={() => step(-1)}
               aria-label="Mes anterior"
-              className="w-7 h-7 grid place-items-center rounded-lg text-ink-2 hover:bg-warn-soft hover:text-warn transition-colors"
+              className="w-7 h-7 grid place-items-center rounded-lg text-ink-2 hover:bg-primary-soft hover:text-primary transition-colors"
             >
               <span className="material-symbols-outlined text-[18px]">chevron_left</span>
             </button>
@@ -119,7 +119,7 @@ export function DueDateCalendar({
               type="button"
               onClick={() => step(1)}
               aria-label="Mes siguiente"
-              className="w-7 h-7 grid place-items-center rounded-lg text-ink-2 hover:bg-warn-soft hover:text-warn transition-colors"
+              className="w-7 h-7 grid place-items-center rounded-lg text-ink-2 hover:bg-primary-soft hover:text-primary transition-colors"
             >
               <span className="material-symbols-outlined text-[18px]">chevron_right</span>
             </button>
@@ -150,12 +150,12 @@ export function DueDateCalendar({
                 aria-label={iso}
                 className={`h-9 rounded-lg text-sm font-semibold transition-colors ${
                   isSelected
-                    ? 'bg-warn text-white'
+                    ? 'bg-primary text-white'
                     : isPast
                       ? 'text-ink-4 cursor-not-allowed'
                       : isToday
-                        ? 'text-warn ring-1 ring-warn/50 hover:bg-warn-soft'
-                        : 'text-ink hover:bg-warn-soft'
+                        ? 'text-primary ring-1 ring-primary/50 hover:bg-primary-soft'
+                        : 'text-ink hover:bg-primary-soft'
                 }`}
               >
                 {d.getDate()}
